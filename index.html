@@ -1,0 +1,3771 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ThreadSeek: A Parallel Disk Scheduling Simulator</title>
+    <meta name="description" content="Watch five disk scheduling algorithms race in parallel Web Worker threads with interactive visualizations, step-by-step playback, comparison dashboard, and viva prep." />
+    <meta property="og:title" content="ThreadSeek: A Parallel Disk Scheduling Simulator" />
+    <meta property="og:description" content="Watch five disk scheduling algorithms race in parallel Web Worker threads with interactive visualizations, step-by-step playback, comparison dashboard, and viva prep." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      :root {
+        --primary: #6b3fa0;
+        --primary-dark: #4b2a75;
+        --primary-light: #e6dcf3;
+        --primary-hover: #583286;
+        --bg-offwhite: #faf7f2;
+        --card-bg: #ffffff;
+        --text-main: #2d2340;
+        --text-muted: #645579;
+        --border-color: #e5dcf0;
+        --danger: #c0392b;
+        --success: #16a34a;
+        --warning: #d97706;
+        --fcfs-color: #2563eb;
+        --sstf-color: #d97706;
+        --scan-color: #059669;
+        --cscan-color: #7c3aed;
+        --look-color: #db2777;
+        --shadow-sm: 0 1px 3px rgba(45, 35, 64, 0.08);
+        --shadow-md: 0 4px 12px rgba(45, 35, 64, 0.1);
+        --shadow-lg: 0 10px 25px rgba(45, 35, 64, 0.14);
+        --radius: 12px;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        background-color: var(--bg-offwhite);
+        color: var(--text-main);
+        line-height: 1.5;
+        padding-bottom: 60px;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      code, pre, .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+
+      /* Header Styling */
+      header.app-header {
+        background: linear-gradient(135deg, #4b2a75 0%, #6b3fa0 55%, #834fbe 100%);
+        color: #ffffff;
+        padding: 24px 20px;
+        box-shadow: 0 4px 20px rgba(75, 42, 117, 0.25);
+        position: relative;
+        overflow: hidden;
+      }
+
+      header.app-header::after {
+        content: '';
+        position: absolute;
+        top: -60px;
+        right: -60px;
+        width: 240px;
+        height: 240px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 70%);
+        pointer-events: none;
+      }
+
+      .header-container {
+        max-width: 1240px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .header-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+
+      .header-brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .disk-icon-container {
+        width: 48px;
+        height: 48px;
+        background: rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+      }
+
+      .disk-icon-container svg {
+        animation: spin-slow 16s linear infinite;
+      }
+
+      @keyframes spin-slow {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
+      .header-title-group h1 {
+        font-size: 1.6rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+      }
+
+      .header-title-group p.tagline {
+        font-size: 0.95rem;
+        color: #f1e9fa;
+        font-style: italic;
+        margin-top: 2px;
+      }
+
+      .header-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.2);
+        color: #ffffff;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+      }
+
+      .badge-glow {
+        background: rgba(16, 185, 129, 0.25);
+        border-color: rgba(52, 211, 153, 0.5);
+        color: #a7f3d0;
+      }
+
+      /* Container */
+      .app-main {
+        max-width: 1240px;
+        margin: 24px auto;
+        padding: 0 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      /* Cards */
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        transition: box-shadow 0.2s ease;
+      }
+
+      .card:hover {
+        box-shadow: var(--shadow-md);
+      }
+
+      .card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border-color);
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .card-title {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--primary-dark);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* Fallback Notice */
+      .alert-banner {
+        display: none;
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        color: #92400e;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        margin-bottom: 16px;
+      }
+
+      .alert-banner.active {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      /* Input Grid */
+      .input-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+      }
+
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .form-group.full-width {
+        grid-column: 1 / -1;
+      }
+
+      label.form-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-main);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .label-hint {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        font-weight: 400;
+      }
+
+      input[type="text"],
+      input[type="number"],
+      select {
+        width: 100%;
+        padding: 9px 12px;
+        border: 1.5px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 0.9rem;
+        color: var(--text-main);
+        background: #ffffff;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+
+      input[type="text"]:focus,
+      input[type="number"]:focus,
+      select:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
+      }
+
+      .checkbox-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 6px;
+      }
+
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.85rem;
+        color: var(--text-main);
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .checkbox-label input[type="checkbox"] {
+        accent-color: var(--primary);
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+
+      /* Presets bar */
+      .presets-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--border-color);
+      }
+
+      .preset-title {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        letter-spacing: 0.05em;
+      }
+
+      .btn-chip {
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        border: 1px solid #d4c2ec;
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .btn-chip:hover {
+        background: #d8c6f0;
+        border-color: var(--primary);
+      }
+
+      /* Action Buttons */
+      .form-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 16px;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 20px;
+        font-size: 0.92rem;
+        font-weight: 600;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        border: none;
+      }
+
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: #ffffff;
+        box-shadow: 0 2px 8px rgba(107, 63, 160, 0.35);
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: linear-gradient(135deg, var(--primary-hover) 0%, #3d2063 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(107, 63, 160, 0.45);
+      }
+
+      .btn-secondary {
+        background: #ffffff;
+        color: var(--text-main);
+        border: 1.5px solid var(--border-color);
+      }
+
+      .btn-secondary:hover:not(:disabled) {
+        background: var(--bg-offwhite);
+        border-color: #c9b9de;
+      }
+
+      .validation-error {
+        display: none;
+        color: #991b1b;
+        background: #fee2e2;
+        border: 1px solid #fecaca;
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        margin-top: 12px;
+      }
+
+      .validation-error.active {
+        display: block;
+      }
+
+      /* Thread Execution Timeline */
+      .threads-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+      }
+
+      .thread-card {
+        background: #ffffff;
+        border: 1.5px solid var(--border-color);
+        border-radius: 10px;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .thread-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+      }
+
+      .thread-card[data-algo="FCFS"]::before { background: var(--fcfs-color); }
+      .thread-card[data-algo="SSTF"]::before { background: var(--sstf-color); }
+      .thread-card[data-algo="SCAN"]::before { background: var(--scan-color); }
+      .thread-card[data-algo="C-SCAN"]::before { background: var(--cscan-color); }
+      .thread-card[data-algo="LOOK"]::before { background: var(--look-color); }
+
+      .thread-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .thread-name {
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: var(--text-main);
+      }
+
+      .thread-status-badge {
+        font-size: 0.72rem;
+        padding: 2px 7px;
+        border-radius: 9999px;
+        font-weight: 600;
+        background: #f1edfa;
+        color: var(--text-muted);
+      }
+
+      .thread-status-badge.running {
+        background: #fef3c7;
+        color: #b45309;
+        animation: pulse 1.2s infinite;
+      }
+
+      .thread-status-badge.completed {
+        background: #dcfce7;
+        color: #15803d;
+      }
+
+      .thread-status-badge.error {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
+      .thread-meta {
+        font-size: 0.76rem;
+        color: var(--text-muted);
+        display: flex;
+        justify-content: space-between;
+      }
+
+      /* View Navigation Tabs */
+      .nav-tabs {
+        display: flex;
+        gap: 8px;
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: 2px;
+        overflow-x: auto;
+      }
+
+      .tab-btn {
+        padding: 10px 18px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        background: none;
+        border: none;
+        border-bottom: 3px solid transparent;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+        transition: all 0.15s ease;
+        margin-bottom: -4px;
+      }
+
+      .tab-btn:hover {
+        color: var(--primary);
+      }
+
+      .tab-btn.active {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+      }
+
+      .tab-pane {
+        display: none;
+      }
+
+      .tab-pane.active {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      /* Algorithm Selector Bar in Detailed Tab */
+      .algo-select-bar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+      }
+
+      .algo-btn {
+        padding: 7px 16px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        background: #f1edfa;
+        color: var(--text-main);
+        border: 1.5px solid transparent;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .algo-btn:hover {
+        background: var(--primary-light);
+      }
+
+      .algo-btn.active[data-algo="FCFS"] { background: #eff6ff; color: #1e40af; border-color: var(--fcfs-color); }
+      .algo-btn.active[data-algo="SSTF"] { background: #fffbeb; color: #92400e; border-color: var(--sstf-color); }
+      .algo-btn.active[data-algo="SCAN"] { background: #ecfdf5; color: #065f46; border-color: var(--scan-color); }
+      .algo-btn.active[data-algo="C-SCAN"] { background: #f5f3ff; color: #5b21b6; border-color: var(--cscan-color); }
+      .algo-btn.active[data-algo="LOOK"] { background: #fdf2f8; color: #9d174d; border-color: var(--look-color); }
+
+      /* Horizontal Disk Track Canvas / SVG */
+      .track-container {
+        width: 100%;
+        background: #ffffff;
+        border: 1.5px solid var(--border-color);
+        border-radius: 12px;
+        padding: 16px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .track-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .track-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--text-main);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .track-legend {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        font-size: 0.76rem;
+        color: var(--text-muted);
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+
+      .svg-track-wrapper {
+        width: 100%;
+        overflow-x: auto;
+      }
+
+      svg.disk-track-svg {
+        width: 100%;
+        min-width: 600px;
+        height: 140px;
+        display: block;
+      }
+
+      /* Step Controls */
+      .playback-panel {
+        background: #f8f6fc;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 14px;
+      }
+
+      .playback-buttons {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .btn-icon {
+        width: 36px;
+        height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        background: #ffffff;
+        color: var(--text-main);
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .btn-icon:hover:not(:disabled) {
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        border-color: #d1bfe8;
+      }
+
+      .btn-icon.play-btn {
+        background: var(--primary);
+        color: #ffffff;
+        border-color: var(--primary);
+        width: 40px;
+        height: 40px;
+      }
+
+      .btn-icon.play-btn:hover:not(:disabled) {
+        background: var(--primary-hover);
+      }
+
+      .speed-selector {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: #ffffff;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 2px 4px;
+      }
+
+      .speed-btn {
+        border: none;
+        background: none;
+        padding: 4px 8px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      .speed-btn.active {
+        background: var(--primary-light);
+        color: var(--primary-dark);
+      }
+
+      .step-indicator {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-main);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .step-counter-badge {
+        background: var(--primary);
+        color: #ffffff;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 0.8rem;
+      }
+
+      /* Step Narration */
+      .narration-box {
+        background: #ffffff;
+        border-left: 4px solid var(--primary);
+        padding: 12px 16px;
+        border-radius: 0 8px 8px 0;
+        font-size: 0.88rem;
+        color: var(--text-main);
+        box-shadow: var(--shadow-sm);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* Single Graph Layout */
+      .graph-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .graph-card {
+        background: #ffffff;
+        border: 1.5px solid var(--border-color);
+        border-radius: 12px;
+        padding: 16px;
+      }
+
+      svg.head-graph-svg {
+        width: 100%;
+        height: 320px;
+        display: block;
+      }
+
+      /* Race Mode Arena */
+      .race-arena {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .race-track-row {
+        background: #ffffff;
+        border: 1.5px solid var(--border-color);
+        border-radius: 10px;
+        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        transition: transform 0.15s ease, border-color 0.15s ease;
+      }
+
+      .race-track-row.winner {
+        border-color: #10b981;
+        background: #f0fdf4;
+      }
+
+      .race-row-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .race-algo-badge {
+        font-size: 0.82rem;
+        font-weight: 700;
+        padding: 3px 10px;
+        border-radius: 6px;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .race-stats {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--text-main);
+        display: flex;
+        gap: 16px;
+      }
+
+      .race-track-svg-wrapper {
+        width: 100%;
+        overflow-x: auto;
+      }
+
+      svg.race-track-svg {
+        width: 100%;
+        min-width: 500px;
+        height: 52px;
+        display: block;
+      }
+
+      /* Comparison Table & Dashboard */
+      .results-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+      }
+
+      .result-algo-card {
+        background: #ffffff;
+        border: 1.5px solid var(--border-color);
+        border-radius: 12px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .result-algo-card.winner {
+        border-color: #10b981;
+        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.2);
+      }
+
+      .winner-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: #10b981;
+        color: #ffffff;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .result-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+      }
+
+      .stat-highlight {
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: var(--text-main);
+        line-height: 1;
+      }
+
+      .stat-unit {
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--text-muted);
+      }
+
+      .stat-details {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .seq-scroll {
+        max-height: 60px;
+        overflow-y: auto;
+        padding: 6px;
+        background: #f8f6fc;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        line-height: 1.4;
+      }
+
+      /* Comparison Table */
+      .table-wrapper {
+        width: 100%;
+        overflow-x: auto;
+        background: #ffffff;
+        border: 1.5px solid var(--border-color);
+        border-radius: 10px;
+      }
+
+      table.compare-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.88rem;
+        text-align: left;
+      }
+
+      table.compare-table th {
+        background: #f8f6fc;
+        color: var(--primary-dark);
+        font-weight: 700;
+        padding: 12px 14px;
+        border-bottom: 2px solid var(--border-color);
+        white-space: nowrap;
+      }
+
+      table.compare-table td {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--text-main);
+      }
+
+      table.compare-table tr:last-child td {
+        border-bottom: none;
+      }
+
+      table.compare-table tr.winner-row {
+        background: #f0fdf4;
+      }
+
+      table.compare-table tr:hover {
+        background: #faf8fd;
+      }
+
+      /* Bar Chart SVG */
+      .bar-chart-container {
+        width: 100%;
+        background: #ffffff;
+        border: 1.5px solid var(--border-color);
+        border-radius: 12px;
+        padding: 18px;
+      }
+
+      svg.bar-chart-svg {
+        width: 100%;
+        height: 280px;
+        display: block;
+      }
+
+      /* Accordion for Theory & Viva */
+      .accordion-group {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .accordion-item {
+        background: #ffffff;
+        border: 1.5px solid var(--border-color);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .accordion-header {
+        width: 100%;
+        padding: 14px 18px;
+        background: #ffffff;
+        border: none;
+        text-align: left;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--text-main);
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        transition: background-color 0.15s;
+      }
+
+      .accordion-header:hover {
+        background: #f8f6fc;
+      }
+
+      .accordion-header.active {
+        background: #f3eefa;
+        color: var(--primary-dark);
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .accordion-icon {
+        transition: transform 0.2s ease;
+      }
+
+      .accordion-header.active .accordion-icon {
+        transform: rotate(180deg);
+      }
+
+      .accordion-content {
+        padding: 16px 18px;
+        font-size: 0.9rem;
+        color: var(--text-main);
+        line-height: 1.6;
+        display: none;
+      }
+
+      .accordion-content.active {
+        display: block;
+      }
+
+      .theory-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+        margin-top: 12px;
+      }
+
+      .theory-pill-card {
+        background: #f8f6fc;
+        border: 1px solid #e1d6ee;
+        border-radius: 8px;
+        padding: 14px;
+      }
+
+      .theory-pill-title {
+        font-weight: 700;
+        font-size: 0.88rem;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      /* Search & Viva */
+      .viva-search-box {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .viva-card {
+        background: #ffffff;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 14px 16px;
+        margin-bottom: 10px;
+      }
+
+      .viva-q {
+        font-weight: 700;
+        font-size: 0.92rem;
+        color: var(--primary-dark);
+        margin-bottom: 6px;
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .viva-a {
+        font-size: 0.88rem;
+        color: var(--text-main);
+        padding-left: 24px;
+        line-height: 1.5;
+      }
+
+      .viva-highlight {
+        background: #eef2ff;
+        border: 1px solid #c7d2fe;
+        border-radius: 6px;
+        padding: 8px 12px;
+        margin-top: 8px;
+        font-weight: 600;
+        color: #3730a3;
+      }
+
+      /* Responsive adjustments */
+      @media (max-width: 768px) {
+        .header-top {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .header-title-group h1 {
+          font-size: 1.35rem;
+        }
+
+        .playback-panel {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .playback-buttons {
+          justify-content: center;
+        }
+
+        .step-indicator {
+          justify-content: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Main App Header -->
+    <header class="app-header">
+      <div class="header-container">
+        <div class="header-top">
+          <div class="header-brand">
+            <div class="disk-icon-container" title="Hard Disk Drive Platter & Actuator Arm">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M12 12L19 19"></path>
+                <path d="M18 6L14 10"></path>
+              </svg>
+            </div>
+            <div class="header-title-group">
+              <h1>ThreadSeek: A Parallel Disk Scheduling Simulator</h1>
+              <p class="tagline">“Watch five disk scheduling algorithms race in parallel threads.”</p>
+            </div>
+          </div>
+          <div class="header-badges">
+            <span class="badge badge-glow">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+              5 Web Workers Concurrency
+            </span>
+            <span class="badge">OS Mini Project</span>
+            <span class="badge">FCFS • SSTF • SCAN • C-SCAN • LOOK</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <!-- Fallback / Environment Notice Banner -->
+      <div id="file-worker-banner" class="alert-banner">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <div>
+          <strong>Thread Fallback Active:</strong> Browser security restrictions on the <code>file://</code> origin blocked native Web Worker Blob instantiation. ThreadSeek seamlessly activated its <strong>Task Queue Thread Emulation Fallback</strong>. All seek calculations, animations, race tracks, and analytics remain 100% operational and mathematically accurate!
+        </div>
+      </div>
+
+      <!-- Input Panel Card -->
+      <section class="card" aria-label="Simulation Inputs">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+            Simulation Parameters &amp; Disk Geometry
+          </div>
+          <div style="font-size:0.8rem; color:var(--text-muted);">
+            Cylinders: <strong id="lbl-cylinder-range">0 to 199</strong>
+          </div>
+        </div>
+
+        <form id="simulation-form" onsubmit="event.preventDefault(); window.runSimulation();">
+          <div class="input-grid">
+            <div class="form-group full-width">
+              <label class="form-label" for="inp-queue">
+                <span>I/O Request Queue (Cylinder Numbers)</span>
+                <span class="label-hint">Comma or space separated</span>
+              </label>
+              <input type="text" id="inp-queue" value="98, 183, 37, 122, 14, 124, 65, 67" placeholder="e.g. 98, 183, 37, 122, 14, 124, 65, 67" required autocomplete="off" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="inp-head">
+                <span>Initial Head Position</span>
+                <span class="label-hint">Default: 53</span>
+              </label>
+              <input type="number" id="inp-head" value="53" min="0" max="10000" required />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="inp-disk-size">
+                <span>Disk Size (Total Cylinders)</span>
+                <span class="label-hint">0 to Size - 1</span>
+              </label>
+              <input type="number" id="inp-disk-size" value="200" min="2" max="10000" required />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="sel-direction">
+                <span>Initial Head Direction</span>
+                <span class="label-hint">For SCAN, C-SCAN &amp; LOOK</span>
+              </label>
+              <select id="sel-direction">
+                <option value="Right" selected>Right (Increasing Cylinders →)</option>
+                <option value="Left">Left (Decreasing Cylinders ←)</option>
+              </select>
+            </div>
+
+            <div class="form-group full-width">
+              <div class="checkbox-group">
+                <label class="checkbox-label" for="chk-cscan-jump">
+                  <input type="checkbox" id="chk-cscan-jump" checked />
+                  <span>Count the C-SCAN circular jump distance in total head movement (standard OS exercise toggle)</span>
+                </label>
+                <label class="checkbox-label" for="chk-workload">
+                  <input type="checkbox" id="chk-workload" />
+                  <span>Simulate thread workload (runs extra CPU cycles in workers to show background thread execution)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Presets -->
+          <div class="presets-bar">
+            <span class="preset-title">Presets:</span>
+            <button type="button" class="btn-chip" onclick="window.applyPreset('default')">Textbook Default (53, Right)</button>
+            <button type="button" class="btn-chip" onclick="window.applyPreset('ascending')">Ascending Sequence</button>
+            <button type="button" class="btn-chip" onclick="window.applyPreset('descending')">Descending Sequence</button>
+            <button type="button" class="btn-chip" onclick="window.applyPreset('clustered')">Clustered Localities</button>
+            <button type="button" class="btn-chip" onclick="window.applyPreset('pingpong')">Extreme Ping-Pong</button>
+            <button type="button" class="btn-chip" onclick="window.applyPreset('random')">Random (8 requests)</button>
+          </div>
+
+          <!-- Inline Error Display -->
+          <div id="validation-error-box" class="validation-error" role="alert"></div>
+
+          <!-- Action Buttons -->
+          <div class="form-actions">
+            <button type="submit" id="btn-run" class="btn btn-primary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              Run Simulation (Spawn 5 Threads)
+            </button>
+            <button type="button" id="btn-reset" class="btn btn-secondary" onclick="window.resetSimulator()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+              Reset to Defaults
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Multithread Monitor / Execution Timeline -->
+      <section class="card" aria-label="Web Worker Thread Monitor">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+            Multithread Execution Monitor (5 Dedicated Web Workers)
+          </div>
+          <span id="multithread-global-status" style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">
+            Ready to dispatch
+          </span>
+        </div>
+
+        <div class="threads-grid">
+          <div class="thread-card" data-algo="FCFS" id="thread-card-FCFS">
+            <div class="thread-header">
+              <span class="thread-name">FCFS-thread (#1)</span>
+              <span class="thread-status-badge" id="tbadge-FCFS">Waiting</span>
+            </div>
+            <div class="thread-meta">
+              <span id="tseek-FCFS">Total: --</span>
+              <span id="ttime-FCFS">Time: --</span>
+            </div>
+          </div>
+
+          <div class="thread-card" data-algo="SSTF" id="thread-card-SSTF">
+            <div class="thread-header">
+              <span class="thread-name">SSTF-thread (#2)</span>
+              <span class="thread-status-badge" id="tbadge-SSTF">Waiting</span>
+            </div>
+            <div class="thread-meta">
+              <span id="tseek-SSTF">Total: --</span>
+              <span id="ttime-SSTF">Time: --</span>
+            </div>
+          </div>
+
+          <div class="thread-card" data-algo="SCAN" id="thread-card-SCAN">
+            <div class="thread-header">
+              <span class="thread-name">SCAN-thread (#3)</span>
+              <span class="thread-status-badge" id="tbadge-SCAN">Waiting</span>
+            </div>
+            <div class="thread-meta">
+              <span id="tseek-SCAN">Total: --</span>
+              <span id="ttime-SCAN">Time: --</span>
+            </div>
+          </div>
+
+          <div class="thread-card" data-algo="C-SCAN" id="thread-card-C-SCAN">
+            <div class="thread-header">
+              <span class="thread-name">C-SCAN-thread (#4)</span>
+              <span class="thread-status-badge" id="tbadge-C-SCAN">Waiting</span>
+            </div>
+            <div class="thread-meta">
+              <span id="tseek-C-SCAN">Total: --</span>
+              <span id="ttime-C-SCAN">Time: --</span>
+            </div>
+          </div>
+
+          <div class="thread-card" data-algo="LOOK" id="thread-card-LOOK">
+            <div class="thread-header">
+              <span class="thread-name">LOOK-thread (#5)</span>
+              <span class="thread-status-badge" id="tbadge-LOOK">Waiting</span>
+            </div>
+            <div class="thread-meta">
+              <span id="tseek-LOOK">Total: --</span>
+              <span id="ttime-LOOK">Time: --</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Navigation Tabs -->
+      <nav class="nav-tabs" aria-label="Simulator Views">
+        <button class="tab-btn active" data-tab="tab-detail" onclick="window.switchTab('tab-detail')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          Single Algorithm Track &amp; Playback
+        </button>
+        <button class="tab-btn" data-tab="tab-race" onclick="window.switchTab('tab-race')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+          Race Mode (All 5 Stacked)
+        </button>
+        <button class="tab-btn" data-tab="tab-dashboard" onclick="window.switchTab('tab-dashboard')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+          Comparison Dashboard &amp; Charts
+        </button>
+        <button class="tab-btn" data-tab="tab-theory" onclick="window.switchTab('tab-theory')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+          Understand the Algorithms (Theory)
+        </button>
+        <button class="tab-btn" data-tab="tab-viva" onclick="window.switchTab('tab-viva')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          Viva Questions &amp; Answers
+        </button>
+      </nav>
+
+      <!-- TAB 1: Single Algorithm Track & Playback -->
+      <section id="tab-detail" class="tab-pane active" aria-label="Detailed Simulation View">
+        <!-- Algorithm Selector Bar -->
+        <div class="card" style="padding:14px 18px;">
+          <div style="font-size:0.8rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px; letter-spacing:0.04em;">
+            Select Algorithm to Inspect:
+          </div>
+          <div class="algo-select-bar">
+            <button type="button" class="algo-btn active" data-algo="FCFS" onclick="window.selectDetailedAlgo('FCFS')">FCFS (First-Come First-Served)</button>
+            <button type="button" class="algo-btn" data-algo="SSTF" onclick="window.selectDetailedAlgo('SSTF')">SSTF (Shortest Seek Time First)</button>
+            <button type="button" class="algo-btn" data-algo="SCAN" onclick="window.selectDetailedAlgo('SCAN')">SCAN (Elevator)</button>
+            <button type="button" class="algo-btn" data-algo="C-SCAN" onclick="window.selectDetailedAlgo('C-SCAN')">C-SCAN (Circular SCAN)</button>
+            <button type="button" class="algo-btn" data-algo="LOOK" onclick="window.selectDetailedAlgo('LOOK')">LOOK (Optimized SCAN)</button>
+          </div>
+        </div>
+
+        <!-- Horizontal Disk Track Card -->
+        <div class="track-container">
+          <div class="track-header">
+            <div class="track-title">
+              <span id="detail-algo-indicator" style="display:inline-block; width:12px; height:12px; border-radius:3px; background:var(--fcfs-color);"></span>
+              <span id="detail-algo-heading">FCFS Cylinder Track</span>
+              <span id="detail-algo-badge" class="badge" style="background:#f1edfa; color:var(--primary-dark); border-color:#dcd2ec;">0 Steps</span>
+            </div>
+            <div class="track-legend">
+              <div class="legend-item"><span class="legend-dot" style="background:var(--danger);"></span> Active Head (▼)</div>
+              <div class="legend-item"><span class="legend-dot" style="background:#9333ea; border:1px solid #7e22ce;"></span> Initial Head (◆)</div>
+              <div class="legend-item"><span class="legend-dot" style="background:#ffffff; border:2px solid #6b7280;"></span> Pending Request</div>
+              <div class="legend-item"><span class="legend-dot" style="background:#10b981;"></span> Serviced Request</div>
+              <div class="legend-item" id="legend-cscan-jump" style="display:none;"><span style="border-bottom:2px dashed #7c3aed; width:18px; display:inline-block;"></span> Circular Jump</div>
+            </div>
+          </div>
+
+          <div class="svg-track-wrapper">
+            <svg id="svg-single-track" class="disk-track-svg" viewBox="0 0 1000 130">
+              <!-- Rendered via JS -->
+            </svg>
+          </div>
+        </div>
+
+        <!-- Step-by-Step Playback Controls -->
+        <div class="playback-panel">
+          <div class="playback-buttons">
+            <button type="button" class="btn-icon" id="btn-step-prev" onclick="window.stepPlayback(-1)" title="Previous Step">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+            </button>
+            <button type="button" class="btn-icon play-btn" id="btn-play-pause" onclick="window.togglePlayPause()" title="Play / Pause">
+              <svg id="icon-play" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              <svg id="icon-pause" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none;"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+            </button>
+            <button type="button" class="btn-icon" id="btn-step-next" onclick="window.stepPlayback(1)" title="Next Step">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+            </button>
+            <button type="button" class="btn-icon" id="btn-reset-anim" onclick="window.resetCurrentAnimation()" title="Reset Animation to Beginning">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+            </button>
+          </div>
+
+          <div class="step-indicator">
+            <span class="step-counter-badge" id="lbl-step-counter">Step 0 / 0</span>
+            <span id="lbl-step-movement" style="color:var(--text-muted); font-size:0.85rem;">Seek: 0 cyl</span>
+          </div>
+
+          <div class="speed-selector">
+            <span style="font-size:0.75rem; color:var(--text-muted); margin-left:4px;">Speed:</span>
+            <button type="button" class="speed-btn" onclick="window.setAnimationSpeed(0.5, this)">0.5×</button>
+            <button type="button" class="speed-btn active" onclick="window.setAnimationSpeed(1, this)">1×</button>
+            <button type="button" class="speed-btn" onclick="window.setAnimationSpeed(2, this)">2×</button>
+          </div>
+        </div>
+
+        <!-- Plain-English Step Narration -->
+        <div class="narration-box" id="narration-text">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--primary); flex-shrink:0"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+          <span id="narration-message">Simulation ready. Press <strong>Play</strong> or <strong>Next Step</strong> to observe the disk head traverse the cylinders.</span>
+        </div>
+
+        <!-- Head Movement Graph -->
+        <div class="graph-card">
+          <div class="card-header" style="margin-bottom:8px; border-bottom:none;">
+            <div class="card-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+              Head Movement Traverse Graph (Cylinder vs. Service Sequence)
+            </div>
+            <div style="font-size:0.8rem; color:var(--text-muted);">
+              X-axis: Cylinder (0 to <span class="lbl-max-cyl">199</span>) • Y-axis: Traversal Step
+            </div>
+          </div>
+          <svg id="svg-head-graph" class="head-graph-svg" viewBox="0 0 1000 320">
+            <!-- Rendered via JS -->
+          </svg>
+        </div>
+      </section>
+
+      <!-- TAB 2: Race Mode (All 5 Simultaneously Stacked) -->
+      <section id="tab-race" class="tab-pane" aria-label="Race Mode View">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                Synchronized Disk Head Race Arena
+              </div>
+              <p style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">
+                Watch all five disk scheduling algorithms traverse the identical cylinder request queue side-by-side.
+              </p>
+            </div>
+            <div class="playback-buttons">
+              <button type="button" class="btn-icon play-btn" id="btn-race-play-pause" onclick="window.toggleRacePlayPause()" title="Play / Pause Race">
+                <svg id="race-icon-play" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                <svg id="race-icon-pause" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none;"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+              </button>
+              <button type="button" class="btn-icon" onclick="window.resetRaceAnimation()" title="Reset Race">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+              </button>
+              <div class="speed-selector">
+                <button type="button" class="speed-btn" onclick="window.setRaceSpeed(0.5, this)">0.5×</button>
+                <button type="button" class="speed-btn active" onclick="window.setRaceSpeed(1, this)">1×</button>
+                <button type="button" class="speed-btn" onclick="window.setRaceSpeed(2, this)">2×</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Educational Disclaimer -->
+          <div style="background:#f3eefa; border-radius:8px; padding:10px 14px; font-size:0.82rem; color:var(--primary-dark); margin-bottom:14px; border:1px solid #e1d4f0;">
+            <strong>Pedagogical Note:</strong> This race animates sequential disk head movements at synchronized step intervals to visually contrast seek paths and arm redirection patterns. Total physical seek movement (cylinders) determines real disk efficiency, while algorithm CPU computation ran independently in parallel Web Workers.
+          </div>
+
+          <!-- 5 Stacked Race Tracks -->
+          <div class="race-arena">
+            <!-- FCFS Row -->
+            <div class="race-track-row" id="race-row-FCFS">
+              <div class="race-row-header">
+                <span class="race-algo-badge" style="background:var(--fcfs-color);">FCFS (First-Come First-Served)</span>
+                <div class="race-stats">
+                  <span>Current: <strong id="race-curr-FCFS">--</strong></span>
+                  <span>Seeked: <strong id="race-seek-FCFS">0 cyl</strong></span>
+                  <span>Serviced: <strong id="race-done-FCFS">0 / 0</strong></span>
+                </div>
+              </div>
+              <div class="race-track-svg-wrapper">
+                <svg id="svg-race-FCFS" class="race-track-svg" viewBox="0 0 1000 50"></svg>
+              </div>
+            </div>
+
+            <!-- SSTF Row -->
+            <div class="race-track-row" id="race-row-SSTF">
+              <div class="race-row-header">
+                <span class="race-algo-badge" style="background:var(--sstf-color);">SSTF (Shortest Seek Time First)</span>
+                <div class="race-stats">
+                  <span>Current: <strong id="race-curr-SSTF">--</strong></span>
+                  <span>Seeked: <strong id="race-seek-SSTF">0 cyl</strong></span>
+                  <span>Serviced: <strong id="race-done-SSTF">0 / 0</strong></span>
+                </div>
+              </div>
+              <div class="race-track-svg-wrapper">
+                <svg id="svg-race-SSTF" class="race-track-svg" viewBox="0 0 1000 50"></svg>
+              </div>
+            </div>
+
+            <!-- SCAN Row -->
+            <div class="race-track-row" id="race-row-SCAN">
+              <div class="race-row-header">
+                <span class="race-algo-badge" style="background:var(--scan-color);">SCAN (Elevator Algorithm)</span>
+                <div class="race-stats">
+                  <span>Current: <strong id="race-curr-SCAN">--</strong></span>
+                  <span>Seeked: <strong id="race-seek-SCAN">0 cyl</strong></span>
+                  <span>Serviced: <strong id="race-done-SCAN">0 / 0</strong></span>
+                </div>
+              </div>
+              <div class="race-track-svg-wrapper">
+                <svg id="svg-race-SCAN" class="race-track-svg" viewBox="0 0 1000 50"></svg>
+              </div>
+            </div>
+
+            <!-- C-SCAN Row -->
+            <div class="race-track-row" id="race-row-C-SCAN">
+              <div class="race-row-header">
+                <span class="race-algo-badge" style="background:var(--cscan-color);">C-SCAN (Circular SCAN)</span>
+                <div class="race-stats">
+                  <span>Current: <strong id="race-curr-C-SCAN">--</strong></span>
+                  <span>Seeked: <strong id="race-seek-C-SCAN">0 cyl</strong></span>
+                  <span>Serviced: <strong id="race-done-C-SCAN">0 / 0</strong></span>
+                </div>
+              </div>
+              <div class="race-track-svg-wrapper">
+                <svg id="svg-race-C-SCAN" class="race-track-svg" viewBox="0 0 1000 50"></svg>
+              </div>
+            </div>
+
+            <!-- LOOK Row -->
+            <div class="race-track-row" id="race-row-LOOK">
+              <div class="race-row-header">
+                <span class="race-algo-badge" style="background:var(--look-color);">LOOK (Optimized SCAN)</span>
+                <div class="race-stats">
+                  <span>Current: <strong id="race-curr-LOOK">--</strong></span>
+                  <span>Seeked: <strong id="race-seek-LOOK">0 cyl</strong></span>
+                  <span>Serviced: <strong id="race-done-LOOK">0 / 0</strong></span>
+                </div>
+              </div>
+              <div class="race-track-svg-wrapper">
+                <svg id="svg-race-LOOK" class="race-track-svg" viewBox="0 0 1000 50"></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: Comparison Dashboard & Bar Chart -->
+      <section id="tab-dashboard" class="tab-pane" aria-label="Comparison Analytics View">
+        <!-- 5 Summary Cards Grid -->
+        <div class="results-grid" id="summary-cards-container">
+          <!-- Rendered via JS -->
+        </div>
+
+        <!-- Comparative SVG Bar Chart -->
+        <div class="bar-chart-container">
+          <div class="card-header" style="margin-bottom:8px; border-bottom:none;">
+            <div class="card-title">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+              Total Head Movement Comparison (Cylinders)
+            </div>
+            <div id="chart-winner-indicator" style="font-size:0.85rem; font-weight:700; color:var(--success);">
+              Lowest: --
+            </div>
+          </div>
+          <svg id="svg-bar-chart" class="bar-chart-svg" viewBox="0 0 800 240">
+            <!-- Rendered via JS -->
+          </svg>
+        </div>
+
+        <!-- Detailed Comparison Table -->
+        <div class="table-wrapper">
+          <table class="compare-table" id="comparison-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Algorithm</th>
+                <th>Service Sequence</th>
+                <th style="text-align:right;">Total Head Movement</th>
+                <th style="text-align:right;">Avg Movement / Req</th>
+                <th>Worker Thread Status</th>
+                <th style="text-align:right;">Worker Exec Time</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 4: Understand the Algorithms (Theory) -->
+      <section id="tab-theory" class="tab-pane" aria-label="Algorithm Theory & Documentation">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+              Operating Systems Core Concepts: Disk Scheduling &amp; Concurrency
+            </div>
+          </div>
+
+          <div class="theory-grid" style="margin-bottom:20px;">
+            <div class="theory-pill-card">
+              <div class="theory-pill-title" style="color:var(--primary-dark);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle></svg>
+                Disk Cylinders &amp; Physical Geometry
+              </div>
+              <p style="font-size:0.85rem; color:var(--text-main);">
+                A hard disk comprises circular platters spinning at high speeds (e.g., 7200 RPM). A <strong>cylinder</strong> represents the set of all tracks across multiple platter surfaces located at the same radial distance from the spindle. All read/write heads move simultaneously on a rigid actuator arm.
+              </p>
+            </div>
+
+            <div class="theory-pill-card">
+              <div class="theory-pill-title" style="color:#d97706;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                Seek Time vs. Total Access Time
+              </div>
+              <p style="font-size:0.85rem; color:var(--text-main);">
+                Disk access time consists of <code>Seek Time + Rotational Latency + Transfer Time</code>. Mechanical <strong>Seek Time</strong> (moving the physical arm across cylinders) is the slowest mechanical phase (~3-10ms), making seek-minimization the primary objective of disk scheduling algorithms.
+              </p>
+            </div>
+
+            <div class="theory-pill-card">
+              <div class="theory-pill-title" style="color:#059669;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                Why Web Workers in ThreadSeek?
+              </div>
+              <p style="font-size:0.85rem; color:var(--text-main);">
+                Standard JavaScript in web browsers runs on a single main UI thread. ThreadSeek spawns <strong>five independent Web Workers</strong> via Blob URLs. Each worker calculates its algorithm's seek order in an isolated background thread without freezing animations, passing results via <code>postMessage()</code>.
+              </p>
+            </div>
+          </div>
+
+          <!-- Deep-dive Accordions for Each Algorithm -->
+          <div class="accordion-group">
+            <!-- FCFS -->
+            <div class="accordion-item">
+              <button type="button" class="accordion-header active" onclick="window.toggleAccordion(this)">
+                <span>1. First-Come, First-Served (FCFS)</span>
+                <svg class="accordion-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+              <div class="accordion-content active">
+                <p><strong>Selection Rule:</strong> Requests are processed strictly in the chronological order of their arrival in the I/O queue.</p>
+                <p><strong>Direction / Boundary Behavior:</strong> Head moves directly from current cylinder to the next queued cylinder without regard for direction or disk boundaries.</p>
+                <p><strong>Advantages:</strong> Absolutely fair to all processes; zero risk of starvation; computationally trivial with <code>O(1)</code> queue dispatch.</p>
+                <p><strong>Disadvantages:</strong> Produces erratic, wild head swings (ping-pong effect), resulting in massive seek distances and poor disk throughput.</p>
+                <p><strong>When to Use:</strong> Light workloads where queue depth is negligible, or real-time FIFO requirements.</p>
+              </div>
+            </div>
+
+            <!-- SSTF -->
+            <div class="accordion-item">
+              <button type="button" class="accordion-header" onclick="window.toggleAccordion(this)">
+                <span>2. Shortest Seek Time First (SSTF)</span>
+                <svg class="accordion-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+              <div class="accordion-content">
+                <p><strong>Selection Rule:</strong> From the current head position, the scheduler chooses the pending cylinder request with the minimum absolute distance: <code>min(|current_head - request_i|)</code>.</p>
+                <p><strong>Tie-Breaking Rule in ThreadSeek:</strong> When two requests are equidistant from the head, the algorithm chooses the request along the current traversal direction; if neither applies, it picks the lower cylinder number.</p>
+                <p><strong>Advantages:</strong> Substantially reduces total head movement compared to FCFS; delivers high throughput for dense workloads.</p>
+                <p><strong>Disadvantages (Critical Viva Concept):</strong> <em>Starvation / Arm Stickiness</em>! Outlying cylinders (e.g. tracks near 0 or maximum cylinder) may wait indefinitely if incoming requests cluster tightly around the current head position.</p>
+              </div>
+            </div>
+
+            <!-- SCAN -->
+            <div class="accordion-item">
+              <button type="button" class="accordion-header" onclick="window.toggleAccordion(this)">
+                <span>3. SCAN (The Elevator Algorithm)</span>
+                <svg class="accordion-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+              <div class="accordion-content">
+                <p><strong>Selection Rule:</strong> Mimics an elevator building lift: the head moves continuously in one direction (e.g., Right / Increasing), servicing any pending requests in its path until it touches the disk boundary (cylinder <code>disk_size - 1</code> or <code>0</code>), then reverses direction and services requests on the return sweep.</p>
+                <p><strong>Boundary Behavior:</strong> Textbook SCAN always travels to the physical boundary before reversing.</p>
+                <p><strong>Advantages:</strong> Eliminates indefinite starvation; upper bound on waiting time is roughly twice the sweep across the disk.</p>
+                <p><strong>Disadvantages:</strong> Requests near the recently visited end experience longer wait times than requests in the center; unnecessary travel to disk boundaries when no requests reside there.</p>
+              </div>
+            </div>
+
+            <!-- C-SCAN -->
+            <div class="accordion-item">
+              <button type="button" class="accordion-header" onclick="window.toggleAccordion(this)">
+                <span>4. Circular SCAN (C-SCAN)</span>
+                <svg class="accordion-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+              <div class="accordion-content">
+                <p><strong>Selection Rule:</strong> Like SCAN, it sweeps in a single direction servicing requests up to the boundary. However, once it reaches the end, it immediately executes a <strong>fast return circular jump</strong> back to the opposite boundary without servicing requests on the return sweep, then resumes servicing in the initial forward direction.</p>
+                <p><strong>Special Jump Treatment:</strong> The return jump is purely an arm repositioning move (often accomplished at maximum actuator velocity). In many OS textbooks (e.g., Silberschatz), the circular jump distance (e.g. <code>disk_size - 1</code>) can either be counted or excluded. ThreadSeek provides an explicit checkbox so students can see both grading conventions!</p>
+                <p><strong>Advantages:</strong> Provides a much more uniform waiting time distribution than SCAN across all cylinders.</p>
+              </div>
+            </div>
+
+            <!-- LOOK -->
+            <div class="accordion-item">
+              <button type="button" class="accordion-header" onclick="window.toggleAccordion(this)">
+                <span>5. LOOK (Optimized SCAN)</span>
+                <svg class="accordion-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+              <div class="accordion-content">
+                <p><strong>Selection Rule:</strong> The head "looks" ahead in the current direction. It moves in that direction servicing requests, but reverses as soon as there are no further pending requests in that direction, rather than proceeding all the way to the disk boundary (0 or 199).</p>
+                <p><strong>Advantages:</strong> Avoids the wasted seek movements to cylinder 0 or disk maximum, almost always achieving lower head movement than SCAN while retaining starvation avoidance.</p>
+                <p><strong>When to Use:</strong> Modern general-purpose OS disk subsystems (or its circular variant C-LOOK).</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: Viva Questions & Answers -->
+      <section id="tab-viva" class="tab-pane" aria-label="Viva Examination Preparation">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                Operating Systems Lab Viva Preparation Guide (20+ Key Questions)
+              </div>
+              <p style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">
+                Comprehensive answers to commonly asked questions during college practicals, project presentations, and viva voce exams.
+              </p>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="btn-chip" onclick="window.expandAllViva(true)">Expand All</button>
+              <button type="button" class="btn-chip" onclick="window.expandAllViva(false)">Collapse All</button>
+            </div>
+          </div>
+
+          <div class="viva-search-box">
+            <input type="text" id="viva-search-input" placeholder="Search viva questions by keyword (e.g. starvation, worker, SSTF, jump)..." oninput="window.filterVivaQuestions()" />
+          </div>
+
+          <!-- Dynamic Viva Question #20 Highlight Box -->
+          <div class="viva-highlight" id="viva-dynamic-summary">
+            <strong>Live Simulator Insight:</strong> Currently, <span id="viva-q20-winner">calculating...</span> achieves the lowest total head movement for the active request queue.
+          </div>
+
+          <div id="viva-questions-list" style="margin-top:14px;">
+            <!-- Question 1 -->
+            <div class="viva-card" data-keywords="disk scheduling seek time algorithm operating system">
+              <div class="viva-q">Q1. What is disk scheduling and why is it necessary?</div>
+              <div class="viva-a">Disk scheduling is the technique employed by the operating system to order the pending I/O read and write requests for secondary storage. It is essential because mechanical disk head seek time is several orders of magnitude slower than electronic RAM access. Scheduling optimizes the sequence to minimize total head travel, maximize throughput, and ensure fair request service.</div>
+            </div>
+
+            <!-- Question 2 -->
+            <div class="viva-card" data-keywords="seek time head movement physical actuator arm">
+              <div class="viva-q">Q2. What is seek time?</div>
+              <div class="viva-a">Seek time is the time taken by the disk read/write actuator arm to physically accelerate, travel across platters, and settle upon the specified cylinder/track containing the desired data sector. It is the dominant latency component in magnetic hard drives.</div>
+            </div>
+
+            <!-- Question 3 -->
+            <div class="viva-card" data-keywords="head movement cylinders track distance">
+              <div class="viva-q">Q3. What is head movement in disk scheduling calculations?</div>
+              <div class="viva-a">Head movement is the total number of cylinders traversed by the read/write head while servicing a sequence of requests. It is calculated as the sum of absolute cylinder differences: <code>&sum; |Current_Cylinder - Next_Cylinder|</code>. Lower head movement directly correlates to reduced mechanical wear and faster response.</div>
+            </div>
+
+            <!-- Question 4 -->
+            <div class="viva-card" data-keywords="fcfs first come first served fairness">
+              <div class="viva-q">Q4. What is the FCFS disk scheduling algorithm?</div>
+              <div class="viva-a">First-Come, First-Served (FCFS) processes disk requests strictly in the order they arrive in the I/O queue. While it is completely fair and free of starvation, it frequently produces wild head oscillations back and forth across platters, yielding the highest total head movement.</div>
+            </div>
+
+            <!-- Question 5 -->
+            <div class="viva-card" data-keywords="sstf shortest seek time first greedy">
+              <div class="viva-q">Q5. What is SSTF and what is its fundamental principle?</div>
+              <div class="viva-a">Shortest Seek Time First (SSTF) is a greedy heuristic that selects the pending request closest to the current disk head position: <code>min(|head - request|)</code>. This minimizes immediate seek distance at every step.</div>
+            </div>
+
+            <!-- Question 6 -->
+            <div class="viva-card" data-keywords="starvation arm stickiness sstf disadvantage">
+              <div class="viva-q">Q6. What is the starvation problem (arm stickiness) in SSTF?</div>
+              <div class="viva-a">Starvation occurs in SSTF when a continuous stream of new requests arrives near the current head position. The head remains confined in that local cylinder cluster (arm stickiness), while requests situated far away at the inner or outer disk edges are starved of service indefinitely.</div>
+            </div>
+
+            <!-- Question 7 -->
+            <div class="viva-card" data-keywords="scan elevator algorithm boundary direction">
+              <div class="viva-q">Q7. What is the SCAN (Elevator) algorithm?</div>
+              <div class="viva-a">SCAN operates like a building elevator: the disk head starts at the initial cylinder and travels in a single direction (e.g. increasing), servicing requests until it reaches the physical disk boundary (cylinder 0 or max). At the boundary, it reverses direction and sweeps back, servicing requests encountered on the return journey.</div>
+            </div>
+
+            <!-- Question 8 -->
+            <div class="viva-card" data-keywords="c-scan circular scan difference return jump">
+              <div class="viva-q">Q8. How does C-SCAN differ from SCAN?</div>
+              <div class="viva-a">In standard SCAN, the head reverses and services requests in both directions. In Circular SCAN (C-SCAN), the head services requests in one direction only. When it reaches the boundary, it executes an immediate return jump to the opposite boundary without servicing requests on the way, providing a uniform waiting time across all cylinders.</div>
+            </div>
+
+            <!-- Question 9 -->
+            <div class="viva-card" data-keywords="look scan difference boundary optimization">
+              <div class="viva-q">Q9. How does LOOK differ from SCAN?</div>
+              <div class="viva-a">SCAN always travels to the physical boundary (0 or disk size - 1) before reversing. LOOK "looks" ahead at the pending queue and reverses immediately at the furthest pending request in that direction, avoiding wasted seek motion to empty boundary cylinders.</div>
+            </div>
+
+            <!-- Question 10 -->
+            <div class="viva-card" data-keywords="disk cylinder platter track sector">
+              <div class="viva-q">Q10. What is a disk cylinder?</div>
+              <div class="viva-a">A cylinder is the collection of all circular tracks on all platter surfaces that lie at the exact same radial distance from the spindle center. Because the heads on all platter arms move simultaneously, data on the same cylinder can be accessed across surfaces without moving the physical actuator arm.</div>
+            </div>
+
+            <!-- Question 11 -->
+            <div class="viva-card" data-keywords="different total movement variance trajectory">
+              <div class="viva-q">Q11. Why do different disk scheduling algorithms produce different total head movements?</div>
+              <div class="viva-a">They employ distinct optimization policies: FCFS prioritizes arrival order; SSTF prioritizes local proximity; SCAN enforces directional sweeps to bounds; LOOK truncates directional sweeps; and C-SCAN enforces unidirectional fairness. These differing trajectories traverse different permutations of cylinder intervals.</div>
+            </div>
+
+            <!-- Question 12 -->
+            <div class="viva-card" data-keywords="multithreading concurrency parallel execution">
+              <div class="viva-q">Q12. What is multithreading in an Operating System?</div>
+              <div class="viva-a">Multithreading is the capability of a CPU or single process to execute multiple concurrent threads of instructions independently. Threads share the address space, open files, and memory of their parent process while maintaining their own registers, program counter, and stack.</div>
+            </div>
+
+            <!-- Question 13 -->
+            <div class="viva-card" data-keywords="web worker background thread browser javascript">
+              <div class="viva-q">Q13. What is a Web Worker in modern browsers?</div>
+              <div class="viva-a">A Web Worker is an isolated native browser background thread that runs JavaScript code parallel to the main UI event loop. Because it operates in a separate execution context, heavy computations running inside a Web Worker never block user interactions, CSS animations, or UI rendering.</div>
+            </div>
+
+            <!-- Question 14 -->
+            <div class="viva-card" data-keywords="five workers threadseek parallel architecture">
+              <div class="viva-q">Q14. Why does ThreadSeek use five independent Web Workers?</div>
+              <div class="viva-a">ThreadSeek assigns each of the five scheduling algorithms (FCFS, SSTF, SCAN, C-SCAN, LOOK) to its own dedicated worker thread (e.g. <code>FCFS-thread</code>). This demonstrates genuine parallel multi-agent computation: all five compute their seek trajectories simultaneously in background threads, reporting progress and results via asynchronous messages.</div>
+            </div>
+
+            <!-- Question 15 -->
+            <div class="viva-card" data-keywords="worker calculation visual animation difference">
+              <div class="viva-q">Q15. What is the difference between worker execution and visual animation?</div>
+              <div class="viva-a">Web Worker execution happens in microseconds on CPU threads, purely computing mathematics and path arrays. Visual animation, on the other hand, is a pedagogical UI simulation displayed on the screen at human-observable speeds (e.g. 500ms per step) to help students visualize the mechanical disk head traversing cylinders.</div>
+            </div>
+
+            <!-- Question 16 -->
+            <div class="viva-card" data-keywords="postMessage message passing worker communication">
+              <div class="viva-q">Q16. Why is postMessage() used for Web Worker communication?</div>
+              <div class="viva-a">Web Workers do not have access to the DOM, window object, or main thread memory. They communicate strictly via asynchronous, isolated message passing using <code>worker.postMessage()</code> and <code>onmessage</code> event handlers, passing serialized structured data safely across thread boundaries.</div>
+            </div>
+
+            <!-- Question 17 -->
+            <div class="viva-card" data-keywords="promise all asynchronous coordination synchronization">
+              <div class="viva-q">Q17. What is the role of Promise.all() in ThreadSeek?</div>
+              <div class="viva-a"><code>Promise.all()</code> acts as a thread barrier/synchronization join mechanism. It takes the five promises representing the dispatched Web Workers and resolves only when all five worker threads have completed their tasks, allowing the application to aggregate results, build the comparison table, and declare the winner synchronously.</div>
+            </div>
+
+            <!-- Question 18 -->
+            <div class="viva-card" data-keywords="worker error handling fault isolation">
+              <div class="viva-q">Q18. What happens if one worker thread fails or throws an error?</div>
+              <div class="viva-a">ThreadSeek implements robust error isolation: each worker has its own <code>onerror</code> listener and try-catch envelope. If one algorithm thread encounters an exception, its status card updates to <em>Error</em> without crashing or corrupting the calculations of the remaining four healthy worker threads.</div>
+            </div>
+
+            <!-- Question 19 -->
+            <div class="viva-card" data-keywords="cscan circular jump counting convention silberschatz">
+              <div class="viva-q">Q19. Why is C-SCAN's circular return jump treated specially?</div>
+              <div class="viva-a">The return jump is an arm reset across the entire platter without read/write activity. In academic literature, some authors (like Silberschatz) count the jump distance in total seek movement, while other textbooks exclude it because no data is transferred. ThreadSeek supports both conventions via a configuration toggle!</div>
+            </div>
+
+            <!-- Question 20 -->
+            <div class="viva-card" data-keywords="lowest head movement winner current simulation result">
+              <div class="viva-q">Q20. Which algorithm achieves the lowest head movement for the current input?</div>
+              <div class="viva-a" id="viva-answer-q20">
+                Simulation has not been executed yet. Click "Run Simulation" above to calculate and display the live result for your input queue!
+              </div>
+            </div>
+
+            <!-- Question 21 -->
+            <div class="viva-card" data-keywords="rotational latency transfer time rpm">
+              <div class="viva-q">Q21. What is rotational latency and how does it relate to RPM?</div>
+              <div class="viva-a">Rotational latency is the delay waiting for the desired sector to rotate under the read/write head once the head has reached the target cylinder. On average, it equals half a revolution: <code>Latency = 0.5 &times; (60 / RPM) seconds</code>. For a 7200 RPM drive, average rotational latency is approximately 4.16ms.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- INLINE WEB WORKER SCRIPT TEMPLATE (Loaded as Blob URL) -->
+    <script id="worker-script" type="text/plain">
+      /**
+       * ThreadSeek Dedicated Web Worker Engine
+       * Each instance computes seek trajectory for a designated disk scheduling algorithm.
+       */
+      self.onmessage = function(event) {
+        var data = event.data;
+        var algo = data.algorithm;
+        var queue = data.queue.slice();
+        var initialHead = data.initialHead;
+        var diskSize = data.diskSize;
+        var direction = data.direction; // 'Right' or 'Left'
+        var countCScanJump = data.countCScanJump;
+        var simulateWorkload = data.simulateWorkload;
+
+        var startTime = performance.now();
+
+        // 1. Send START notification
+        self.postMessage({
+          type: 'START',
+          algorithm: algo,
+          timestamp: startTime
+        });
+
+        // 2. Optional bounded CPU workload to demonstrate background thread execution
+        if (simulateWorkload) {
+          var dummy = 0;
+          for (var i = 0; i < 6000000; i++) {
+            dummy = (dummy + (i ^ (i >> 2))) & 0xffffff;
+          }
+        }
+
+        // 3. Algorithm Calculation Engine
+        var result;
+        try {
+          switch (algo) {
+            case 'FCFS':
+              result = runFCFS(queue, initialHead);
+              break;
+            case 'SSTF':
+              result = runSSTF(queue, initialHead, direction);
+              break;
+            case 'SCAN':
+              result = runSCAN(queue, initialHead, diskSize, direction);
+              break;
+            case 'C-SCAN':
+              result = runCSCAN(queue, initialHead, diskSize, direction, countCScanJump);
+              break;
+            case 'LOOK':
+              result = runLOOK(queue, initialHead, direction);
+              break;
+            default:
+              throw new Error('Unknown algorithm: ' + algo);
+          }
+
+          var endTime = performance.now();
+          var elapsedMs = Math.round((endTime - startTime) * 100) / 100;
+
+          // 4. Post RESULT back to main thread
+          self.postMessage({
+            type: 'RESULT',
+            algorithm: algo,
+            path: result.path,
+            serviceOrder: result.serviceOrder,
+            totalHeadMovement: result.totalHeadMovement,
+            requestsServicedCount: queue.length,
+            averageMovementPerRequest: queue.length > 0 ? (result.totalHeadMovement / queue.length) : 0,
+            elapsedMs: elapsedMs
+          });
+        } catch (err) {
+          self.postMessage({
+            type: 'ERROR',
+            algorithm: algo,
+            error: err.message || String(err)
+          });
+        }
+      };
+
+      /**
+       * FCFS: First-Come, First-Served
+       */
+      function runFCFS(queue, initialHead) {
+        var path = [];
+        var serviceOrder = [];
+        var currentHead = initialHead;
+        var total = 0;
+
+        // Step 0: Initial position
+        path.push({
+          step: 0,
+          from: currentHead,
+          to: currentHead,
+          distance: 0,
+          cumulative: 0,
+          type: 'initial',
+          servicedRequest: null,
+          isJump: false
+        });
+
+        for (var i = 0; i < queue.length; i++) {
+          var target = queue[i];
+          var dist = Math.abs(target - currentHead);
+          total += dist;
+          currentHead = target;
+          serviceOrder.push(target);
+
+          path.push({
+            step: i + 1,
+            from: path[path.length - 1].to,
+            to: target,
+            distance: dist,
+            cumulative: total,
+            type: 'request',
+            servicedRequest: target,
+            isJump: false
+          });
+        }
+
+        return {
+          path: path,
+          serviceOrder: serviceOrder,
+          totalHeadMovement: total
+        };
+      }
+
+      /**
+       * SSTF: Shortest Seek Time First
+       */
+      function runSSTF(queue, initialHead, initialDirection) {
+        var path = [];
+        var serviceOrder = [];
+        var pending = queue.slice();
+        var currentHead = initialHead;
+        var total = 0;
+        var currentDir = initialDirection;
+
+        path.push({
+          step: 0,
+          from: currentHead,
+          to: currentHead,
+          distance: 0,
+          cumulative: 0,
+          type: 'initial',
+          servicedRequest: null,
+          isJump: false
+        });
+
+        var stepCount = 0;
+        while (pending.length > 0) {
+          var bestIndex = -1;
+          var minDistance = Infinity;
+
+          for (var i = 0; i < pending.length; i++) {
+            var dist = Math.abs(pending[i] - currentHead);
+            if (dist < minDistance) {
+              minDistance = dist;
+              bestIndex = i;
+            } else if (dist === minDistance) {
+              // Deterministic tie-breaking: favor current direction, then lower cylinder
+              var reqA = pending[bestIndex];
+              var reqB = pending[i];
+              var dirMatchesB = (currentDir === 'Right' && reqB >= currentHead) || (currentDir === 'Left' && reqB <= currentHead);
+              var dirMatchesA = (currentDir === 'Right' && reqA >= currentHead) || (currentDir === 'Left' && reqA <= currentHead);
+
+              if (dirMatchesB && !dirMatchesA) {
+                bestIndex = i;
+              } else if (!dirMatchesB && !dirMatchesA && reqB < reqA) {
+                bestIndex = i;
+              }
+            }
+          }
+
+          var chosen = pending[bestIndex];
+          pending.splice(bestIndex, 1);
+
+          total += minDistance;
+          if (chosen > currentHead) currentDir = 'Right';
+          else if (chosen < currentHead) currentDir = 'Left';
+
+          stepCount++;
+          serviceOrder.push(chosen);
+          path.push({
+            step: stepCount,
+            from: currentHead,
+            to: chosen,
+            distance: minDistance,
+            cumulative: total,
+            type: 'request',
+            servicedRequest: chosen,
+            isJump: false
+          });
+
+          currentHead = chosen;
+        }
+
+        return {
+          path: path,
+          serviceOrder: serviceOrder,
+          totalHeadMovement: total
+        };
+      }
+
+      /**
+       * SCAN: Elevator Algorithm
+       */
+      function runSCAN(queue, initialHead, diskSize, direction) {
+        var path = [];
+        var serviceOrder = [];
+        var currentHead = initialHead;
+        var total = 0;
+        var stepCount = 0;
+
+        path.push({
+          step: 0,
+          from: currentHead,
+          to: currentHead,
+          distance: 0,
+          cumulative: 0,
+          type: 'initial',
+          servicedRequest: null,
+          isJump: false
+        });
+
+        // Partition requests
+        var rightReqs = [];
+        var leftReqs = [];
+
+        for (var i = 0; i < queue.length; i++) {
+          if (queue[i] >= initialHead) {
+            rightReqs.push(queue[i]);
+          } else {
+            leftReqs.push(queue[i]);
+          }
+        }
+
+        rightReqs.sort(function(a, b) { return a - b; });
+        leftReqs.sort(function(a, b) { return b - a; }); // descending
+
+        if (direction === 'Right') {
+          // Sweep Right
+          for (var r = 0; r < rightReqs.length; r++) {
+            var targetR = rightReqs[r];
+            var distR = Math.abs(targetR - currentHead);
+            total += distR;
+            stepCount++;
+            serviceOrder.push(targetR);
+            path.push({
+              step: stepCount,
+              from: currentHead,
+              to: targetR,
+              distance: distR,
+              cumulative: total,
+              type: 'request',
+              servicedRequest: targetR,
+              isJump: false
+            });
+            currentHead = targetR;
+          }
+
+          // In textbook SCAN, if there are requests on the other side, head moves to boundary (diskSize - 1)
+          if (leftReqs.length > 0) {
+            var boundaryRight = diskSize - 1;
+            if (currentHead !== boundaryRight) {
+              var distB = Math.abs(boundaryRight - currentHead);
+              total += distB;
+              stepCount++;
+              path.push({
+                step: stepCount,
+                from: currentHead,
+                to: boundaryRight,
+                distance: distB,
+                cumulative: total,
+                type: 'boundary',
+                servicedRequest: null,
+                isJump: false
+              });
+              currentHead = boundaryRight;
+            }
+
+            // Reverse Left
+            for (var l = 0; l < leftReqs.length; l++) {
+              var targetL = leftReqs[l];
+              var distL = Math.abs(targetL - currentHead);
+              total += distL;
+              stepCount++;
+              serviceOrder.push(targetL);
+              path.push({
+                step: stepCount,
+                from: currentHead,
+                to: targetL,
+                distance: distL,
+                cumulative: total,
+                type: 'request',
+                servicedRequest: targetL,
+                isJump: false
+              });
+              currentHead = targetL;
+            }
+          }
+        } else {
+          // Sweep Left
+          for (var l2 = 0; l2 < leftReqs.length; l2++) {
+            var targetL2 = leftReqs[l2];
+            var distL2 = Math.abs(targetL2 - currentHead);
+            total += distL2;
+            stepCount++;
+            serviceOrder.push(targetL2);
+            path.push({
+              step: stepCount,
+              from: currentHead,
+              to: targetL2,
+              distance: distL2,
+              cumulative: total,
+              type: 'request',
+              servicedRequest: targetL2,
+              isJump: false
+            });
+            currentHead = targetL2;
+          }
+
+          if (rightReqs.length > 0) {
+            var boundaryLeft = 0;
+            if (currentHead !== boundaryLeft) {
+              var distB2 = Math.abs(boundaryLeft - currentHead);
+              total += distB2;
+              stepCount++;
+              path.push({
+                step: stepCount,
+                from: currentHead,
+                to: boundaryLeft,
+                distance: distB2,
+                cumulative: total,
+                type: 'boundary',
+                servicedRequest: null,
+                isJump: false
+              });
+              currentHead = boundaryLeft;
+            }
+
+            // Reverse Right
+            for (var r2 = 0; r2 < rightReqs.length; r2++) {
+              var targetR2 = rightReqs[r2];
+              var distR2 = Math.abs(targetR2 - currentHead);
+              total += distR2;
+              stepCount++;
+              serviceOrder.push(targetR2);
+              path.push({
+                step: stepCount,
+                from: currentHead,
+                to: targetR2,
+                distance: distR2,
+                cumulative: total,
+                type: 'request',
+                servicedRequest: targetR2,
+                isJump: false
+              });
+              currentHead = targetR2;
+            }
+          }
+        }
+
+        return {
+          path: path,
+          serviceOrder: serviceOrder,
+          totalHeadMovement: total
+        };
+      }
+
+      /**
+       * C-SCAN: Circular SCAN
+       */
+      function runCSCAN(queue, initialHead, diskSize, direction, countCScanJump) {
+        var path = [];
+        var serviceOrder = [];
+        var currentHead = initialHead;
+        var total = 0;
+        var stepCount = 0;
+
+        path.push({
+          step: 0,
+          from: currentHead,
+          to: currentHead,
+          distance: 0,
+          cumulative: 0,
+          type: 'initial',
+          servicedRequest: null,
+          isJump: false
+        });
+
+        var rightReqs = [];
+        var leftReqs = [];
+
+        for (var i = 0; i < queue.length; i++) {
+          if (queue[i] >= initialHead) {
+            rightReqs.push(queue[i]);
+          } else {
+            leftReqs.push(queue[i]);
+          }
+        }
+
+        if (direction === 'Right') {
+          rightReqs.sort(function(a, b) { return a - b; });
+          leftReqs.sort(function(a, b) { return a - b; }); // ascending order for circular sweep
+
+          // 1. Service right requests
+          for (var r = 0; r < rightReqs.length; r++) {
+            var targetR = rightReqs[r];
+            var distR = Math.abs(targetR - currentHead);
+            total += distR;
+            stepCount++;
+            serviceOrder.push(targetR);
+            path.push({
+              step: stepCount,
+              from: currentHead,
+              to: targetR,
+              distance: distR,
+              cumulative: total,
+              type: 'request',
+              servicedRequest: targetR,
+              isJump: false
+            });
+            currentHead = targetR;
+          }
+
+          // 2. Go to boundary diskSize - 1
+          if (leftReqs.length > 0) {
+            var boundaryRight = diskSize - 1;
+            if (currentHead !== boundaryRight) {
+              var distB = Math.abs(boundaryRight - currentHead);
+              total += distB;
+              stepCount++;
+              path.push({
+                step: stepCount,
+                from: currentHead,
+                to: boundaryRight,
+                distance: distB,
+                cumulative: total,
+                type: 'boundary',
+                servicedRequest: null,
+                isJump: false
+              });
+              currentHead = boundaryRight;
+            }
+
+            // 3. Circular Jump from boundaryRight (199) to boundaryLeft (0)
+            var jumpDist = diskSize - 1;
+            if (countCScanJump) {
+              total += jumpDist;
+            }
+            stepCount++;
+            path.push({
+              step: stepCount,
+              from: boundaryRight,
+              to: 0,
+              distance: jumpDist,
+              cumulative: total,
+              type: 'jump',
+              servicedRequest: null,
+              isJump: true,
+              jumpCounted: countCScanJump
+            });
+            currentHead = 0;
+
+            // 4. Continue Right from 0 servicing leftReqs
+            for (var l = 0; l < leftReqs.length; l++) {
+              var targetL = leftReqs[l];
+              var distL = Math.abs(targetL - currentHead);
+              total += distL;
+              stepCount++;
+              serviceOrder.push(targetL);
+              path.push({
+                step: stepCount,
+                from: currentHead,
+                to: targetL,
+                distance: distL,
+                cumulative: total,
+                type: 'request',
+                servicedRequest: targetL,
+                isJump: false
+              });
+              currentHead = targetL;
+            }
+          }
+        } else {
+          // Direction Left
+          leftReqs.sort(function(a, b) { return b - a; }); // descending
+          rightReqs.sort(function(a, b) { return b - a; }); // descending for circular return
+
+          // 1. Service left requests
+          for (var l2 = 0; l2 < leftReqs.length; l2++) {
+            var targetL2 = leftReqs[l2];
+            var distL2 = Math.abs(targetL2 - currentHead);
+            total += distL2;
+            stepCount++;
+            serviceOrder.push(targetL2);
+            path.push({
+              step: stepCount,
+              from: currentHead,
+              to: targetL2,
+              distance: distL2,
+              cumulative: total,
+              type: 'request',
+              servicedRequest: targetL2,
+              isJump: false
+            });
+            currentHead = targetL2;
+          }
+
+          // 2. Go to boundary 0
+          if (rightReqs.length > 0) {
+            var boundaryLeft = 0;
+            if (currentHead !== boundaryLeft) {
+              var distB2 = Math.abs(boundaryLeft - currentHead);
+              total += distB2;
+              stepCount++;
+              path.push({
+                step: stepCount,
+                from: currentHead,
+                to: boundaryLeft,
+                distance: distB2,
+                cumulative: total,
+                type: 'boundary',
+                servicedRequest: null,
+                isJump: false
+              });
+              currentHead = boundaryLeft;
+            }
+
+            // 3. Circular jump from 0 to boundaryRight (diskSize - 1)
+            var jumpDist2 = diskSize - 1;
+            if (countCScanJump) {
+              total += jumpDist2;
+            }
+            stepCount++;
+            path.push({
+              step: stepCount,
+              from: 0,
+              to: diskSize - 1,
+              distance: jumpDist2,
+              cumulative: total,
+              type: 'jump',
+              servicedRequest: null,
+              isJump: true,
+              jumpCounted: countCScanJump
+            });
+            currentHead = diskSize - 1;
+
+            // 4. Continue Left servicing rightReqs
+            for (var r2 = 0; r2 < rightReqs.length; r2++) {
+              var targetR2 = rightReqs[r2];
+              var distR2 = Math.abs(targetR2 - currentHead);
+              total += distR2;
+              stepCount++;
+              serviceOrder.push(targetR2);
+              path.push({
+                step: stepCount,
+                from: currentHead,
+                to: targetR2,
+                distance: distR2,
+                cumulative: total,
+                type: 'request',
+                servicedRequest: targetR2,
+                isJump: false
+              });
+              currentHead = targetR2;
+            }
+          }
+        }
+
+        return {
+          path: path,
+          serviceOrder: serviceOrder,
+          totalHeadMovement: total
+        };
+      }
+
+      /**
+       * LOOK: Optimized SCAN
+       */
+      function runLOOK(queue, initialHead, direction) {
+        var path = [];
+        var serviceOrder = [];
+        var currentHead = initialHead;
+        var total = 0;
+        var stepCount = 0;
+
+        path.push({
+          step: 0,
+          from: currentHead,
+          to: currentHead,
+          distance: 0,
+          cumulative: 0,
+          type: 'initial',
+          servicedRequest: null,
+          isJump: false
+        });
+
+        var rightReqs = [];
+        var leftReqs = [];
+
+        for (var i = 0; i < queue.length; i++) {
+          if (queue[i] >= initialHead) {
+            rightReqs.push(queue[i]);
+          } else {
+            leftReqs.push(queue[i]);
+          }
+        }
+
+        rightReqs.sort(function(a, b) { return a - b; });
+        leftReqs.sort(function(a, b) { return b - a; });
+
+        if (direction === 'Right') {
+          // Sweep Right
+          for (var r = 0; r < rightReqs.length; r++) {
+            var targetR = rightReqs[r];
+            var distR = Math.abs(targetR - currentHead);
+            total += distR;
+            stepCount++;
+            serviceOrder.push(targetR);
+            path.push({
+              step: stepCount,
+              from: currentHead,
+              to: targetR,
+              distance: distR,
+              cumulative: total,
+              type: 'request',
+              servicedRequest: targetR,
+              isJump: false
+            });
+            currentHead = targetR;
+          }
+
+          // Sweep Left (reverses at highest request, does NOT visit diskSize - 1)
+          for (var l = 0; l < leftReqs.length; l++) {
+            var targetL = leftReqs[l];
+            var distL = Math.abs(targetL - currentHead);
+            total += distL;
+            stepCount++;
+            serviceOrder.push(targetL);
+            path.push({
+              step: stepCount,
+              from: currentHead,
+              to: targetL,
+              distance: distL,
+              cumulative: total,
+              type: 'request',
+              servicedRequest: targetL,
+              isJump: false
+            });
+            currentHead = targetL;
+          }
+        } else {
+          // Sweep Left
+          for (var l2 = 0; l2 < leftReqs.length; l2++) {
+            var targetL2 = leftReqs[l2];
+            var distL2 = Math.abs(targetL2 - currentHead);
+            total += distL2;
+            stepCount++;
+            serviceOrder.push(targetL2);
+            path.push({
+              step: stepCount,
+              from: currentHead,
+              to: targetL2,
+              distance: distL2,
+              cumulative: total,
+              type: 'request',
+              servicedRequest: targetL2,
+              isJump: false
+            });
+            currentHead = targetL2;
+          }
+
+          // Sweep Right (reverses at lowest request, does NOT visit 0)
+          for (var r2 = 0; r2 < rightReqs.length; r2++) {
+            var targetR2 = rightReqs[r2];
+            var distR2 = Math.abs(targetR2 - currentHead);
+            total += distR2;
+            stepCount++;
+            serviceOrder.push(targetR2);
+            path.push({
+              step: stepCount,
+              from: currentHead,
+              to: targetR2,
+              distance: distR2,
+              cumulative: total,
+              type: 'request',
+              servicedRequest: targetR2,
+              isJump: false
+            });
+            currentHead = targetR2;
+          }
+        }
+
+        return {
+          path: path,
+          serviceOrder: serviceOrder,
+          totalHeadMovement: total
+        };
+      }
+    </script>
+
+    <!-- MAIN THREAD APPLICATION LOGIC -->
+    <script>
+      (function() {
+        'use strict';
+
+        // State Store
+        var ALGORITHMS = ['FCFS', 'SSTF', 'SCAN', 'C-SCAN', 'LOOK'];
+        var ALGO_COLORS = {
+          'FCFS': '#2563eb',
+          'SSTF': '#d97706',
+          'SCAN': '#059669',
+          'C-SCAN': '#7c3aed',
+          'LOOK': '#db2777'
+        };
+
+        var appState = {
+          queue: [98, 183, 37, 122, 14, 124, 65, 67],
+          initialHead: 53,
+          diskSize: 200,
+          direction: 'Right',
+          countCScanJump: true,
+          simulateWorkload: false,
+          activeAlgo: 'FCFS',
+          activeTab: 'tab-detail',
+          results: {}, // algo -> result object
+          workerStatuses: {},
+          workerTimes: {},
+          isRunning: false,
+          fallbackActive: false,
+
+          // Single playback animation state
+          anim: {
+            currentStep: 0,
+            isPlaying: false,
+            speed: 1, // multiplier: 0.5, 1, 2
+            timerId: null
+          },
+
+          // Race playback animation state
+          race: {
+            stepIndex: 0,
+            isPlaying: false,
+            speed: 1,
+            timerId: null
+          }
+        };
+
+        // DOM references cache
+        var dom = {};
+
+        function initDOM() {
+          dom.queueInput = document.getElementById('inp-queue');
+          dom.headInput = document.getElementById('inp-head');
+          dom.diskSizeInput = document.getElementById('inp-disk-size');
+          dom.directionSelect = document.getElementById('sel-direction');
+          dom.cscanJumpCheck = document.getElementById('chk-cscan-jump');
+          dom.workloadCheck = document.getElementById('chk-workload');
+          dom.errorBox = document.getElementById('validation-error-box');
+          dom.runBtn = document.getElementById('btn-run');
+          dom.resetBtn = document.getElementById('btn-reset');
+          dom.fileBanner = document.getElementById('file-worker-banner');
+          dom.globalStatus = document.getElementById('multithread-global-status');
+          dom.lblCylinderRange = document.getElementById('lbl-cylinder-range');
+          dom.lblStepCounter = document.getElementById('lbl-step-counter');
+          dom.lblStepMovement = document.getElementById('lbl-step-movement');
+          dom.narrationMessage = document.getElementById('narration-message');
+          dom.iconPlay = document.getElementById('icon-play');
+          dom.iconPause = document.getElementById('icon-pause');
+          dom.raceIconPlay = document.getElementById('race-icon-play');
+          dom.raceIconPause = document.getElementById('race-icon-pause');
+          dom.svgSingleTrack = document.getElementById('svg-single-track');
+          dom.svgHeadGraph = document.getElementById('svg-head-graph');
+          dom.svgBarChart = document.getElementById('svg-bar-chart');
+          dom.summaryContainer = document.getElementById('summary-cards-container');
+          dom.tableBody = document.getElementById('table-body');
+          dom.chartWinner = document.getElementById('chart-winner-indicator');
+          dom.vivaAnswerQ20 = document.getElementById('viva-answer-q20');
+          dom.vivaWinnerHighlight = document.getElementById('viva-q20-winner');
+        }
+
+        // ==========================================
+        // 1. Validation Logic
+        // ==========================================
+        function validateInputs() {
+          var rawQueue = dom.queueInput.value.trim();
+          var rawHead = dom.headInput.value.trim();
+          var rawDiskSize = dom.diskSizeInput.value.trim();
+          var direction = dom.directionSelect.value;
+
+          if (!rawQueue) {
+            return { valid: false, error: 'Request queue cannot be empty. Please enter cylinder numbers.' };
+          }
+
+          var diskSize = parseInt(rawDiskSize, 10);
+          if (isNaN(diskSize) || diskSize <= 1) {
+            return { valid: false, error: 'Disk size must be a positive integer greater than 1 (e.g. 200).' };
+          }
+
+          var initialHead = parseInt(rawHead, 10);
+          if (isNaN(initialHead) || initialHead < 0 || initialHead >= diskSize) {
+            return { valid: false, error: 'Initial head position must be between 0 and ' + (diskSize - 1) + '.' };
+          }
+
+          if (direction !== 'Right' && direction !== 'Left') {
+            return { valid: false, error: 'Initial direction must be either Right or Left.' };
+          }
+
+          // Parse queue
+          var tokens = rawQueue.split(/[\s,]+/);
+          var parsedQueue = [];
+          for (var i = 0; i < tokens.length; i++) {
+            var tok = tokens[i].trim();
+            if (!tok) continue;
+            var num = parseInt(tok, 10);
+            if (isNaN(num)) {
+              return { valid: false, error: 'Invalid request: "' + tok + '" is not an integer cylinder number.' };
+            }
+            if (num < 0 || num >= diskSize) {
+              return { valid: false, error: 'Cylinder request ' + num + ' is out of valid range (0 to ' + (diskSize - 1) + ').' };
+            }
+            parsedQueue.push(num);
+          }
+
+          if (parsedQueue.length === 0) {
+            return { valid: false, error: 'Request queue contains no valid numbers.' };
+          }
+
+          return {
+            valid: true,
+            queue: parsedQueue,
+            initialHead: initialHead,
+            diskSize: diskSize,
+            direction: direction,
+            countCScanJump: dom.cscanJumpCheck.checked,
+            simulateWorkload: dom.workloadCheck.checked
+          };
+        }
+
+        function showError(msg) {
+          if (!msg) {
+            dom.errorBox.classList.remove('active');
+            dom.errorBox.textContent = '';
+          } else {
+            dom.errorBox.classList.add('active');
+            dom.errorBox.textContent = msg;
+          }
+        }
+
+        // ==========================================
+        // 2. Multithread Web Worker Engine
+        // ==========================================
+        var activeWorkers = [];
+        var activeBlobUrls = [];
+
+        function terminateWorkers() {
+          for (var i = 0; i < activeWorkers.length; i++) {
+            try {
+              activeWorkers[i].terminate();
+            } catch (e) {}
+          }
+          activeWorkers = [];
+
+          for (var j = 0; j < activeBlobUrls.length; j++) {
+            try {
+              URL.revokeObjectURL(activeBlobUrls[j]);
+            } catch (e) {}
+          }
+          activeBlobUrls = [];
+        }
+
+        function createWorkerInstance() {
+          var workerScriptEl = document.getElementById('worker-script');
+          var blob = new Blob([workerScriptEl.textContent], { type: 'application/javascript' });
+          var blobUrl = URL.createObjectURL(blob);
+          activeBlobUrls.push(blobUrl);
+          var worker = new Worker(blobUrl);
+          activeWorkers.push(worker);
+          return worker;
+        }
+
+        /**
+         * Runs an algorithm using a native Web Worker
+         */
+        function spawnWorkerTask(algo, inputData) {
+          return new Promise(function(resolve, reject) {
+            try {
+              updateThreadBadge(algo, 'Running...', 'running');
+              var worker = createWorkerInstance();
+
+              worker.onmessage = function(e) {
+                var msg = e.data;
+                if (msg.type === 'START') {
+                  updateThreadBadge(algo, 'Running...', 'running');
+                } else if (msg.type === 'RESULT') {
+                  updateThreadBadge(algo, 'Completed', 'completed');
+                  document.getElementById('tseek-' + algo).textContent = 'Total: ' + msg.totalHeadMovement + ' cyl';
+                  document.getElementById('ttime-' + algo).textContent = 'Time: ' + msg.elapsedMs + 'ms';
+                  resolve(msg);
+                } else if (msg.type === 'ERROR') {
+                  updateThreadBadge(algo, 'Error', 'error');
+                  reject(new Error(msg.error));
+                }
+              };
+
+              worker.onerror = function(err) {
+                updateThreadBadge(algo, 'Error', 'error');
+                reject(err);
+              };
+
+              worker.postMessage({
+                algorithm: algo,
+                queue: inputData.queue,
+                initialHead: inputData.initialHead,
+                diskSize: inputData.diskSize,
+                direction: inputData.direction,
+                countCScanJump: inputData.countCScanJump,
+                simulateWorkload: inputData.simulateWorkload
+              });
+            } catch (err) {
+              // Web Worker creation failed (e.g. security block on file://)
+              reject(err);
+            }
+          });
+        }
+
+        /**
+         * Synchronous fallback engine if file:// blocks Web Workers
+         */
+        function runFallbackTask(algo, inputData) {
+          return new Promise(function(resolve) {
+            updateThreadBadge(algo, 'Running (Local)...', 'running');
+            setTimeout(function() {
+              var startTime = performance.now();
+              // Extract functions directly from worker script via eval in safe isolated scope
+              var workerCode = document.getElementById('worker-script').textContent;
+              var fnWrapper = new Function('algo', 'queue', 'initialHead', 'diskSize', 'direction', 'countCScanJump', 'simulateWorkload',
+                workerCode + '\n' +
+                'var res;\n' +
+                'if (algo === "FCFS") res = runFCFS(queue, initialHead);\n' +
+                'else if (algo === "SSTF") res = runSSTF(queue, initialHead, direction);\n' +
+                'else if (algo === "SCAN") res = runSCAN(queue, initialHead, diskSize, direction);\n' +
+                'else if (algo === "C-SCAN") res = runCSCAN(queue, initialHead, diskSize, direction, countCScanJump);\n' +
+                'else if (algo === "LOOK") res = runLOOK(queue, initialHead, direction);\n' +
+                'return res;'
+              );
+
+              var res = fnWrapper(algo, inputData.queue.slice(), inputData.initialHead, inputData.diskSize, inputData.direction, inputData.countCScanJump, inputData.simulateWorkload);
+              var endTime = performance.now();
+              var elapsedMs = Math.round((endTime - startTime) * 100) / 100;
+
+              updateThreadBadge(algo, 'Completed', 'completed');
+              document.getElementById('tseek-' + algo).textContent = 'Total: ' + res.totalHeadMovement + ' cyl';
+              document.getElementById('ttime-' + algo).textContent = 'Time: ' + elapsedMs + 'ms';
+
+              resolve({
+                algorithm: algo,
+                path: res.path,
+                serviceOrder: res.serviceOrder,
+                totalHeadMovement: res.totalHeadMovement,
+                requestsServicedCount: inputData.queue.length,
+                averageMovementPerRequest: inputData.queue.length > 0 ? (res.totalHeadMovement / inputData.queue.length) : 0,
+                elapsedMs: elapsedMs
+              });
+            }, 30);
+          });
+        }
+
+        function updateThreadBadge(algo, text, statusClass) {
+          var badge = document.getElementById('tbadge-' + algo);
+          if (badge) {
+            badge.textContent = text;
+            badge.className = 'thread-status-badge ' + (statusClass || '');
+          }
+        }
+
+        // ==========================================
+        // 3. Simulation Orchestrator
+        // ==========================================
+        window.runSimulation = function() {
+          showError(null);
+          var validation = validateInputs();
+          if (!validation.valid) {
+            showError(validation.error);
+            return;
+          }
+
+          // Stop running animations
+          stopCurrentAnimation();
+          stopRaceAnimation();
+          terminateWorkers();
+
+          appState.queue = validation.queue;
+          appState.initialHead = validation.initialHead;
+          appState.diskSize = validation.diskSize;
+          appState.direction = validation.direction;
+          appState.countCScanJump = validation.countCScanJump;
+          appState.simulateWorkload = validation.simulateWorkload;
+          appState.isRunning = true;
+
+          dom.runBtn.disabled = true;
+          dom.lblCylinderRange.textContent = '0 to ' + (appState.diskSize - 1);
+          var maxCylSpans = document.querySelectorAll('.lbl-max-cyl');
+          for (var i = 0; i < maxCylSpans.length; i++) {
+            maxCylSpans[i].textContent = appState.diskSize - 1;
+          }
+
+          dom.globalStatus.textContent = 'Spawning 5 parallel thread workers...';
+
+          for (var a = 0; a < ALGORITHMS.length; a++) {
+            var algoKey = ALGORITHMS[a];
+            updateThreadBadge(algoKey, 'Waiting...', '');
+            document.getElementById('tseek-' + algoKey).textContent = 'Total: --';
+            document.getElementById('ttime-' + algoKey).textContent = 'Time: --';
+          }
+
+          // Test if Web Workers are supported and allowed
+          var testWorkerWorks = true;
+          try {
+            var testBlob = new Blob(['postMessage("ok");'], { type: 'application/javascript' });
+            var testUrl = URL.createObjectURL(testBlob);
+            var testW = new Worker(testUrl);
+            testW.terminate();
+            URL.revokeObjectURL(testUrl);
+          } catch (e) {
+            testWorkerWorks = false;
+          }
+
+          var promises = [];
+          if (testWorkerWorks) {
+            dom.fileBanner.classList.remove('active');
+            appState.fallbackActive = false;
+            for (var w = 0; w < ALGORITHMS.length; w++) {
+              promises.push(spawnWorkerTask(ALGORITHMS[w], validation));
+            }
+          } else {
+            // Activate Fallback
+            dom.fileBanner.classList.add('active');
+            appState.fallbackActive = true;
+            for (var f = 0; f < ALGORITHMS.length; f++) {
+              promises.push(runFallbackTask(ALGORITHMS[f], validation));
+            }
+          }
+
+          // Coordinate using Promise.all
+          Promise.all(promises)
+            .then(function(resultsArray) {
+              appState.isRunning = false;
+              dom.runBtn.disabled = false;
+              dom.globalStatus.textContent = 'All 5 threads completed successfully!';
+
+              appState.results = {};
+              for (var r = 0; r < resultsArray.length; r++) {
+                var res = resultsArray[r];
+                appState.results[res.algorithm] = res;
+              }
+
+              // Update All Visual Components
+              renderSingleAlgorithmTrack();
+              renderHeadMovementGraph();
+              renderRaceModeArena();
+              renderComparisonDashboard();
+              updateVivaDynamicQuestion();
+
+              // Terminate and clean up worker instances now that results are safely captured
+              terminateWorkers();
+            })
+            .catch(function(err) {
+              appState.isRunning = false;
+              dom.runBtn.disabled = false;
+              dom.globalStatus.textContent = 'Worker thread error detected.';
+              showError('A thread computation encountered an error: ' + (err.message || err));
+              terminateWorkers();
+            });
+        };
+
+        // ==========================================
+        // 4. Horizontal Disk Track Visualizer
+        // ==========================================
+        function getCylinderX(cyl, diskSize, svgWidth, margin) {
+          if (diskSize <= 1) return margin;
+          var usableWidth = svgWidth - (margin * 2);
+          return margin + (cyl / (diskSize - 1)) * usableWidth;
+        }
+
+        function renderSingleAlgorithmTrack() {
+          var algo = appState.activeAlgo;
+          var res = appState.results[algo];
+          if (!res) return;
+
+          var svg = dom.svgSingleTrack;
+          var width = 1000;
+          var height = 130;
+          var margin = 40;
+          var trackY = 70;
+          var diskSize = appState.diskSize;
+
+          document.getElementById('detail-algo-heading').textContent = algo + ' Disk Track';
+          document.getElementById('detail-algo-indicator').style.background = ALGO_COLORS[algo];
+          document.getElementById('detail-algo-badge').textContent = res.path.length + ' Traversal Steps • Total: ' + res.totalHeadMovement + ' cyl';
+
+          // Toggle legend circular jump item
+          var cscanLegend = document.getElementById('legend-cscan-jump');
+          if (cscanLegend) {
+            cscanLegend.style.display = (algo === 'C-SCAN') ? 'flex' : 'none';
+          }
+
+          var step = appState.anim.currentStep;
+          if (step >= res.path.length) step = res.path.length - 1;
+          var currentPathStep = res.path[step];
+          var currentHeadPos = currentPathStep ? currentPathStep.to : appState.initialHead;
+
+          // Compute serviced set up to current step
+          var servicedSet = {};
+          for (var s = 1; s <= step; s++) {
+            if (res.path[s] && res.path[s].servicedRequest !== null) {
+              servicedSet[res.path[s].servicedRequest] = true;
+            }
+          }
+
+          var markup = '';
+
+          // Defs (Gradients & Shadows)
+          markup += '<defs>';
+          markup += '  <linearGradient id="trackGrad" x1="0%" y1="0%" x2="100%" y2="0%">';
+          markup += '    <stop offset="0%" stop-color="#8a5dbd" />';
+          markup += '    <stop offset="100%" stop-color="#4b2a75" />';
+          markup += '  </linearGradient>';
+          markup += '  <filter id="headShadow" x="-20%" y="-20%" width="140%" height="140%">';
+          markup += '    <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.3" />';
+          markup += '  </filter>';
+          markup += '</defs>';
+
+          // Background Track Platter Representation
+          markup += '<rect x="' + (margin - 10) + '" y="' + (trackY - 14) + '" width="' + (width - margin * 2 + 20) + '" height="28" rx="14" fill="#f4effa" stroke="#dcd0eb" stroke-width="1.5" />';
+          // Main Center Track Groove
+          markup += '<line x1="' + margin + '" y1="' + trackY + '" x2="' + (width - margin) + '" y2="' + trackY + '" stroke="url(#trackGrad)" stroke-width="4" stroke-linecap="round" />';
+
+          // Cylinder Boundary & Interval Ticks
+          var tickIntervals = [0, 0.25, 0.5, 0.75, 1];
+          for (var t = 0; t < tickIntervals.length; t++) {
+            var fraction = tickIntervals[t];
+            var tickCyl = Math.round(fraction * (diskSize - 1));
+            var tickX = getCylinderX(tickCyl, diskSize, width, margin);
+            markup += '<line x1="' + tickX + '" y1="' + (trackY - 10) + '" x2="' + tickX + '" y2="' + (trackY + 10) + '" stroke="#6b3fa0" stroke-width="1.5" opacity="0.6" />';
+            markup += '<text x="' + tickX + '" y="' + (trackY + 28) + '" font-size="11" font-weight="600" fill="#645579" text-anchor="middle" font-family="ui-monospace, monospace">' + tickCyl + '</text>';
+          }
+
+          // Initial Head Marker (Diamond at top of track)
+          var initHeadX = getCylinderX(appState.initialHead, diskSize, width, margin);
+          markup += '<g transform="translate(' + initHeadX + ', ' + (trackY) + ')">';
+          markup += '  <polygon points="0,-16 6,-10 0,-4 -6,-10" fill="#9333ea" stroke="#ffffff" stroke-width="1.5" />';
+          markup += '  <line x1="0" y1="-4" x2="0" y2="4" stroke="#9333ea" stroke-width="1.5" stroke-dasharray="2,2" />';
+          markup += '  <text x="0" y="-20" font-size="10" font-weight="700" fill="#7e22ce" text-anchor="middle">Initial ' + appState.initialHead + '</text>';
+          markup += '</g>';
+
+          // Request Markers
+          for (var q = 0; q < appState.queue.length; q++) {
+            var reqCyl = appState.queue[q];
+            var reqX = getCylinderX(reqCyl, diskSize, width, margin);
+            var isServiced = servicedSet[reqCyl];
+
+            if (isServiced) {
+              // Serviced Marker (Green Filled Dot)
+              markup += '<circle cx="' + reqX + '" y="' + trackY + '" r="7" fill="#10b981" stroke="#ffffff" stroke-width="2" />';
+              markup += '<text x="' + reqX + '" y="' + (trackY - 14) + '" font-size="10" font-weight="700" fill="#047857" text-anchor="middle" font-family="ui-monospace, monospace">' + reqCyl + '</text>';
+            } else {
+              // Pending Marker (Hollow Dark Dot)
+              markup += '<circle cx="' + reqX + '" y="' + trackY + '" r="6" fill="#ffffff" stroke="#4b5563" stroke-width="2" />';
+              markup += '<text x="' + reqX + '" y="' + (trackY - 14) + '" font-size="10" font-weight="600" fill="#4b5563" text-anchor="middle" font-family="ui-monospace, monospace">' + reqCyl + '</text>';
+            }
+          }
+
+          // For C-SCAN: Draw Jump Arc if jump is active in path
+          if (algo === 'C-SCAN') {
+            for (var j = 1; j <= step; j++) {
+              var st = res.path[j];
+              if (st && st.isJump) {
+                var jFromX = getCylinderX(st.from, diskSize, width, margin);
+                var jToX = getCylinderX(st.to, diskSize, width, margin);
+                var arcY = trackY + 36;
+                markup += '<path d="M ' + jFromX + ' ' + (trackY + 8) + ' Q ' + ((jFromX + jToX) / 2) + ' ' + (arcY + 20) + ' ' + jToX + ' ' + (trackY + 8) + '" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-dasharray="5,4" />';
+                markup += '<text x="' + ((jFromX + jToX) / 2) + '" y="' + (arcY + 16) + '" font-size="11" font-weight="700" fill="#7c3aed" text-anchor="middle">Circular Jump (Fast Return)</text>';
+              }
+            }
+          }
+
+          // Active Disk Head Indicator (Red Triangular Pointer ▼)
+          var headX = getCylinderX(currentHeadPos, diskSize, width, margin);
+          markup += '<g transform="translate(' + headX + ', ' + trackY + ')" filter="url(#headShadow)">';
+          // Red Head Pointer Arrow
+          markup += '  <polygon points="0,2 -9,-14 9,-14" fill="#c0392b" stroke="#ffffff" stroke-width="1.5" />';
+          // Cylinder Label Badge above head
+          markup += '  <rect x="-24" y="-36" width="48" height="18" rx="4" fill="#c0392b" />';
+          markup += '  <text x="0" y="-23" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle" font-family="ui-monospace, monospace">' + currentHeadPos + '</text>';
+          // Vertical guide line
+          markup += '  <line x1="0" y1="2" x2="0" y2="16" stroke="#c0392b" stroke-width="2" stroke-linecap="round" />';
+          markup += '</g>';
+
+          svg.innerHTML = markup;
+
+          // Update playback stats & narration
+          updatePlaybackUI(res, step);
+        }
+
+        function updatePlaybackUI(res, step) {
+          dom.lblStepCounter.textContent = 'Step ' + step + ' / ' + (res.path.length - 1);
+          var pathStep = res.path[step];
+
+          if (!pathStep || step === 0) {
+            dom.lblStepMovement.textContent = 'Seek: 0 cyl';
+            dom.narrationMessage.innerHTML = 'Initial state: Disk head positioned at cylinder <strong>' + appState.initialHead + '</strong>. All ' + appState.queue.length + ' requests are pending.';
+            return;
+          }
+
+          dom.lblStepMovement.textContent = 'Step Seek: ' + pathStep.distance + ' cyl | Total: ' + pathStep.cumulative + ' cyl';
+
+          if (pathStep.type === 'request') {
+            dom.narrationMessage.innerHTML = 'Step ' + step + ': Head moved from cylinder <strong>' + pathStep.from + '</strong> to <strong>' + pathStep.to + '</strong> (seek: <strong>' + pathStep.distance + '</strong> cylinders). <strong>Request at cylinder ' + pathStep.to + ' serviced!</strong>';
+          } else if (pathStep.type === 'boundary') {
+            dom.narrationMessage.innerHTML = 'Step ' + step + ': Head traversed to disk boundary cylinder <strong>' + pathStep.to + '</strong> (seek: <strong>' + pathStep.distance + '</strong> cylinders) to reverse direction.';
+          } else if (pathStep.type === 'jump') {
+            dom.narrationMessage.innerHTML = 'Step ' + step + ': <em>Circular Jump</em> from cylinder <strong>' + pathStep.from + '</strong> to <strong>' + pathStep.to + '</strong>. ' + (pathStep.jumpCounted ? 'Jump distance of ' + pathStep.distance + ' cylinders <strong>included</strong> in total head movement.' : 'Jump distance of ' + pathStep.distance + ' cylinders <strong>excluded</strong> from total head movement.');
+          }
+        }
+
+        // ==========================================
+        // 5. Head Movement Graph Visualizer (SVG)
+        // ==========================================
+        function renderHeadMovementGraph() {
+          var algo = appState.activeAlgo;
+          var res = appState.results[algo];
+          if (!res) return;
+
+          var svg = dom.svgHeadGraph;
+          var width = 1000;
+          var height = 320;
+          var marginX = 60;
+          var marginY = 40;
+          var diskSize = appState.diskSize;
+          var path = res.path;
+          var currentStep = appState.anim.currentStep;
+
+          var usableWidth = width - (marginX * 2);
+          var usableHeight = height - (marginY * 2);
+          var stepCount = Math.max(path.length - 1, 1);
+
+          function getGraphX(cyl) {
+            return marginX + (cyl / (diskSize - 1)) * usableWidth;
+          }
+
+          function getGraphY(stepIdx) {
+            return marginY + (stepIdx / stepCount) * usableHeight;
+          }
+
+          var markup = '';
+
+          // Background Grid Lines
+          markup += '<rect x="0" y="0" width="' + width + '" height="' + height + '" fill="#faf8fd" />';
+
+          // Vertical Cylinder Grid Lines
+          var tickIntervals = [0, 0.25, 0.5, 0.75, 1];
+          for (var t = 0; t < tickIntervals.length; t++) {
+            var frac = tickIntervals[t];
+            var cylVal = Math.round(frac * (diskSize - 1));
+            var gx = getGraphX(cylVal);
+            markup += '<line x1="' + gx + '" y1="' + marginY + '" x2="' + gx + '" y2="' + (height - marginY) + '" stroke="#e5daf0" stroke-width="1" stroke-dasharray="3,3" />';
+            markup += '<text x="' + gx + '" y="' + (height - marginY + 18) + '" font-size="11" font-weight="600" fill="#645579" text-anchor="middle" font-family="ui-monospace, monospace">' + cylVal + '</text>';
+          }
+
+          // Horizontal Step Grid Lines
+          for (var s = 0; s < path.length; s++) {
+            var gy = getGraphY(s);
+            markup += '<line x1="' + marginX + '" y1="' + gy + '" x2="' + (width - marginX) + '" y2="' + gy + '" stroke="#ede5f5" stroke-width="1" />';
+            markup += '<text x="' + (marginX - 12) + '" y="' + (gy + 4) + '" font-size="10" font-weight="600" fill="#7a6b8e" text-anchor="end">S' + s + '</text>';
+          }
+
+          // Axis Lines
+          markup += '<line x1="' + marginX + '" y1="' + marginY + '" x2="' + marginX + '" y2="' + (height - marginY) + '" stroke="#4b2a75" stroke-width="1.5" />';
+          markup += '<line x1="' + marginX + '" y1="' + (height - marginY) + '" x2="' + (width - marginX) + '" y2="' + (height - marginY) + '" stroke="#4b2a75" stroke-width="1.5" />';
+
+          // Axis Labels
+          markup += '<text x="' + (width / 2) + '" y="' + (height - 6) + '" font-size="12" font-weight="700" fill="#4b2a75" text-anchor="middle">Cylinder Position (0 to ' + (diskSize - 1) + ')</text>';
+
+          // Draw Paths
+          var color = ALGO_COLORS[algo] || '#6b3fa0';
+
+          for (var i = 1; i < path.length; i++) {
+            var p0 = path[i - 1];
+            var p1 = path[i];
+            var x0 = getGraphX(p0.to);
+            var y0 = getGraphY(i - 1);
+            var x1 = getGraphX(p1.to);
+            var y1 = getGraphY(i);
+
+            var isPast = i <= currentStep;
+            var pathColor = isPast ? color : '#d1c4e9';
+            var strokeW = isPast ? 3 : 1.5;
+
+            if (p1.isJump) {
+              // Dashed line for circular jump
+              markup += '<line x1="' + x0 + '" y1="' + y0 + '" x2="' + x1 + '" y2="' + y1 + '" stroke="#7c3aed" stroke-width="2.5" stroke-dasharray="6,4" opacity="' + (isPast ? '1' : '0.4') + '" />';
+            } else {
+              markup += '<line x1="' + x0 + '" y1="' + y0 + '" x2="' + x1 + '" y2="' + y1 + '" stroke="' + pathColor + '" stroke-width="' + strokeW + '" stroke-linecap="round" />';
+            }
+          }
+
+          // Draw Data Points
+          for (var k = 0; k < path.length; k++) {
+            var pt = path[k];
+            var px = getGraphX(pt.to);
+            var py = getGraphY(k);
+            var isCurrent = (k === currentStep);
+            var isCompleted = (k <= currentStep);
+
+            if (isCurrent) {
+              // Active step point (glowing red)
+              markup += '<circle cx="' + px + '" y="' + py + '" r="8" fill="#c0392b" stroke="#ffffff" stroke-width="2.5" />';
+              markup += '<circle cx="' + px + '" y="' + py + '" r="12" fill="none" stroke="#c0392b" stroke-width="1.5" opacity="0.6" />';
+              markup += '<text x="' + (px + 14) + '" y="' + (py + 4) + '" font-size="11" font-weight="800" fill="#c0392b" font-family="ui-monospace, monospace">' + pt.to + ' (Step ' + k + ')</text>';
+            } else {
+              var ptColor = isCompleted ? color : '#9e8fb2';
+              var ptRadius = (k === 0) ? 6 : 4.5;
+              markup += '<circle cx="' + px + '" y="' + py + '" r="' + ptRadius + '" fill="' + ptColor + '" stroke="#ffffff" stroke-width="1.5" />';
+              // Cylinder label near point
+              markup += '<text x="' + (px + 8) + '" y="' + (py - 4) + '" font-size="9" font-weight="600" fill="#645579" font-family="ui-monospace, monospace">' + pt.to + '</text>';
+            }
+          }
+
+          svg.innerHTML = markup;
+        }
+
+        // ==========================================
+        // 6. Single Algorithm Playback Controls
+        // ==========================================
+        window.stepPlayback = function(delta) {
+          var res = appState.results[appState.activeAlgo];
+          if (!res) return;
+
+          stopCurrentAnimation();
+          var newStep = appState.anim.currentStep + delta;
+          if (newStep < 0) newStep = 0;
+          if (newStep >= res.path.length) newStep = res.path.length - 1;
+
+          appState.anim.currentStep = newStep;
+          renderSingleAlgorithmTrack();
+          renderHeadMovementGraph();
+        };
+
+        window.togglePlayPause = function() {
+          if (appState.anim.isPlaying) {
+            stopCurrentAnimation();
+          } else {
+            startCurrentAnimation();
+          }
+        };
+
+        function startCurrentAnimation() {
+          var res = appState.results[appState.activeAlgo];
+          if (!res) return;
+
+          // If at end, loop back to start
+          if (appState.anim.currentStep >= res.path.length - 1) {
+            appState.anim.currentStep = 0;
+          }
+
+          appState.anim.isPlaying = true;
+          dom.iconPlay.style.display = 'none';
+          dom.iconPause.style.display = 'block';
+
+          scheduleNextStep();
+        }
+
+        function stopCurrentAnimation() {
+          appState.anim.isPlaying = false;
+          if (appState.anim.timerId) {
+            clearTimeout(appState.anim.timerId);
+            appState.anim.timerId = null;
+          }
+          if (dom.iconPlay) {
+            dom.iconPlay.style.display = 'block';
+            dom.iconPause.style.display = 'none';
+          }
+        }
+
+        function scheduleNextStep() {
+          if (!appState.anim.isPlaying) return;
+
+          var baseInterval = 750; // ms
+          var interval = baseInterval / appState.anim.speed;
+
+          appState.anim.timerId = setTimeout(function() {
+            var res = appState.results[appState.activeAlgo];
+            if (!res) return;
+
+            if (appState.anim.currentStep < res.path.length - 1) {
+              appState.anim.currentStep++;
+              renderSingleAlgorithmTrack();
+              renderHeadMovementGraph();
+              scheduleNextStep();
+            } else {
+              stopCurrentAnimation();
+            }
+          }, interval);
+        }
+
+        window.resetCurrentAnimation = function() {
+          stopCurrentAnimation();
+          appState.anim.currentStep = 0;
+          renderSingleAlgorithmTrack();
+          renderHeadMovementGraph();
+        };
+
+        window.setAnimationSpeed = function(speed, btn) {
+          appState.anim.speed = speed;
+          var btns = btn.parentNode.querySelectorAll('.speed-btn');
+          for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+          btn.classList.add('active');
+        };
+
+        window.selectDetailedAlgo = function(algo) {
+          appState.activeAlgo = algo;
+          stopCurrentAnimation();
+          appState.anim.currentStep = 0;
+
+          var btns = document.querySelectorAll('.algo-btn');
+          for (var i = 0; i < btns.length; i++) {
+            if (btns[i].getAttribute('data-algo') === algo) {
+              btns[i].classList.add('active');
+            } else {
+              btns[i].classList.remove('active');
+            }
+          }
+
+          renderSingleAlgorithmTrack();
+          renderHeadMovementGraph();
+        };
+
+        // ==========================================
+        // 7. Race Mode Visualizer (All 5 Stacked)
+        // ==========================================
+        function renderRaceModeArena() {
+          var step = appState.race.stepIndex;
+          var diskSize = appState.diskSize;
+
+          // Find the lowest total head movement among completed results to highlight winner
+          var minMovement = Infinity;
+          for (var m = 0; m < ALGORITHMS.length; m++) {
+            var rKey = ALGORITHMS[m];
+            if (appState.results[rKey]) {
+              if (appState.results[rKey].totalHeadMovement < minMovement) {
+                minMovement = appState.results[rKey].totalHeadMovement;
+              }
+            }
+          }
+
+          for (var a = 0; a < ALGORITHMS.length; a++) {
+            var algo = ALGORITHMS[a];
+            var res = appState.results[algo];
+            var rowEl = document.getElementById('race-row-' + algo);
+            var svgEl = document.getElementById('svg-race-' + algo);
+
+            if (!res || !rowEl || !svgEl) continue;
+
+            // Mark winner row
+            if (res.totalHeadMovement === minMovement && minMovement < Infinity) {
+              rowEl.classList.add('winner');
+            } else {
+              rowEl.classList.remove('winner');
+            }
+
+            // Path step bounded for this algo
+            var maxSteps = res.path.length - 1;
+            var currentIdx = Math.min(step, maxSteps);
+            var currentPathStep = res.path[currentIdx];
+            var currentPos = currentPathStep ? currentPathStep.to : appState.initialHead;
+            var currentSeek = currentPathStep ? currentPathStep.cumulative : 0;
+
+            // Serviced count up to currentIdx
+            var servicedCount = 0;
+            for (var s = 1; s <= currentIdx; s++) {
+              if (res.path[s] && res.path[s].servicedRequest !== null) {
+                servicedCount++;
+              }
+            }
+
+            document.getElementById('race-curr-' + algo).textContent = currentPos;
+            document.getElementById('race-seek-' + algo).textContent = currentSeek + ' cyl';
+            document.getElementById('race-done-' + algo).textContent = servicedCount + ' / ' + appState.queue.length;
+
+            // Draw miniature race track SVG
+            var width = 1000;
+            var height = 50;
+            var margin = 30;
+            var trackY = 25;
+
+            var markup = '';
+            // Track Groove
+            markup += '<rect x="' + margin + '" y="' + (trackY - 4) + '" width="' + (width - margin * 2) + '" height="8" rx="4" fill="#ede5f5" />';
+
+            // Boundary ticks
+            var x0 = getCylinderX(0, diskSize, width, margin);
+            var xMax = getCylinderX(diskSize - 1, diskSize, width, margin);
+            markup += '<line x1="' + x0 + '" y1="' + (trackY - 8) + '" x2="' + x0 + '" y2="' + (trackY + 8) + '" stroke="#645579" stroke-width="1.5" />';
+            markup += '<line x1="' + xMax + '" y1="' + (trackY - 8) + '" x2="' + xMax + '" y2="' + (trackY + 8) + '" stroke="#645579" stroke-width="1.5" />';
+
+            // Request dots
+            for (var q = 0; q < appState.queue.length; q++) {
+              var qx = getCylinderX(appState.queue[q], diskSize, width, margin);
+              markup += '<circle cx="' + qx + '" y="' + trackY + '" r="3" fill="#a79ab8" />';
+            }
+
+            // Animated Head Position Pointer
+            var hx = getCylinderX(currentPos, diskSize, width, margin);
+            var color = ALGO_COLORS[algo];
+            markup += '<g transform="translate(' + hx + ', ' + trackY + ')">';
+            markup += '  <polygon points="0,1 -6,-9 6,-9" fill="' + color + '" stroke="#ffffff" stroke-width="1.5" />';
+            markup += '  <circle cx="0" cy="0" r="4" fill="' + color + '" stroke="#ffffff" stroke-width="1.5" />';
+            markup += '</g>';
+
+            svgEl.innerHTML = markup;
+          }
+        }
+
+        window.toggleRacePlayPause = function() {
+          if (appState.race.isPlaying) {
+            stopRaceAnimation();
+          } else {
+            startRaceAnimation();
+          }
+        };
+
+        function startRaceAnimation() {
+          // Find max step count across all 5
+          var maxStepsAcrossAll = 0;
+          for (var a = 0; a < ALGORITHMS.length; a++) {
+            var res = appState.results[ALGORITHMS[a]];
+            if (res && res.path.length > maxStepsAcrossAll) {
+              maxStepsAcrossAll = res.path.length;
+            }
+          }
+
+          if (appState.race.stepIndex >= maxStepsAcrossAll) {
+            appState.race.stepIndex = 0;
+          }
+
+          appState.race.isPlaying = true;
+          dom.raceIconPlay.style.display = 'none';
+          dom.raceIconPause.style.display = 'block';
+
+          scheduleNextRaceStep(maxStepsAcrossAll);
+        }
+
+        function stopRaceAnimation() {
+          appState.race.isPlaying = false;
+          if (appState.race.timerId) {
+            clearTimeout(appState.race.timerId);
+            appState.race.timerId = null;
+          }
+          if (dom.raceIconPlay) {
+            dom.raceIconPlay.style.display = 'block';
+            dom.raceIconPause.style.display = 'none';
+          }
+        }
+
+        function scheduleNextRaceStep(maxSteps) {
+          if (!appState.race.isPlaying) return;
+
+          var baseInterval = 700;
+          var interval = baseInterval / appState.race.speed;
+
+          appState.race.timerId = setTimeout(function() {
+            if (appState.race.stepIndex < maxSteps - 1) {
+              appState.race.stepIndex++;
+              renderRaceModeArena();
+              scheduleNextRaceStep(maxSteps);
+            } else {
+              stopRaceAnimation();
+            }
+          }, interval);
+        }
+
+        window.resetRaceAnimation = function() {
+          stopRaceAnimation();
+          appState.race.stepIndex = 0;
+          renderRaceModeArena();
+        };
+
+        window.setRaceSpeed = function(speed, btn) {
+          appState.race.speed = speed;
+          var btns = btn.parentNode.querySelectorAll('.speed-btn');
+          for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+          btn.classList.add('active');
+        };
+
+        // ==========================================
+        // 8. Comparison Dashboard & Bar Chart
+        // ==========================================
+        function renderComparisonDashboard() {
+          var container = dom.summaryContainer;
+          var tableBody = dom.tableBody;
+          container.innerHTML = '';
+          tableBody.innerHTML = '';
+
+          // Determine minimum total seek distance
+          var minTotal = Infinity;
+          for (var i = 0; i < ALGORITHMS.length; i++) {
+            var k = ALGORITHMS[i];
+            if (appState.results[k] && appState.results[k].totalHeadMovement < minTotal) {
+              minTotal = appState.results[k].totalHeadMovement;
+            }
+          }
+
+          // Create sorted array for ranking
+          var rankList = [];
+          for (var j = 0; j < ALGORITHMS.length; j++) {
+            var algoName = ALGORITHMS[j];
+            var data = appState.results[algoName];
+            if (data) {
+              rankList.push(data);
+            }
+          }
+
+          rankList.sort(function(a, b) {
+            return a.totalHeadMovement - b.totalHeadMovement;
+          });
+
+          // 1. Render Summary Cards
+          for (var c = 0; c < ALGORITHMS.length; c++) {
+            var algo = ALGORITHMS[c];
+            var res = appState.results[algo];
+            if (!res) continue;
+
+            var isWinner = (res.totalHeadMovement === minTotal);
+            var card = document.createElement('div');
+            card.className = 'result-algo-card' + (isWinner ? ' winner' : '');
+
+            var cardHTML = '';
+            if (isWinner) {
+              cardHTML += '<div class="winner-badge">🏆 Minimum Seek</div>';
+            }
+
+            cardHTML += '<div class="result-title" style="color:' + ALGO_COLORS[algo] + '">' + algo + '</div>';
+            cardHTML += '<div class="stat-highlight">' + res.totalHeadMovement + ' <span class="stat-unit">cylinders</span></div>';
+
+            cardHTML += '<div class="stat-details">';
+            cardHTML += '  <div><strong>Avg per req:</strong> ' + res.averageMovementPerRequest.toFixed(2) + ' cyl</div>';
+            cardHTML += '  <div><strong>Requests:</strong> ' + res.requestsServicedCount + ' serviced</div>';
+            cardHTML += '  <div><strong>Thread execution:</strong> ' + res.elapsedMs + ' ms</div>';
+            cardHTML += '</div>';
+
+            // Service Order preview
+            cardHTML += '<div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); margin-top:4px;">Service Trajectory:</div>';
+            cardHTML += '<div class="seq-scroll mono">' + appState.initialHead + ' → ' + res.serviceOrder.join(' → ') + '</div>';
+
+            cardHTML += '<button type="button" class="btn btn-secondary" style="font-size:0.8rem; padding:6px 12px; margin-top:8px;" onclick="window.inspectAlgo(\'' + algo + '\')">Inspect Step-by-Step →</button>';
+
+            card.innerHTML = cardHTML;
+            container.appendChild(card);
+          }
+
+          // 2. Render Table Rows (Ranked)
+          for (var r = 0; r < rankList.length; r++) {
+            var item = rankList[r];
+            var isWin = (item.totalHeadMovement === minTotal);
+            var tr = document.createElement('tr');
+            if (isWin) tr.className = 'winner-row';
+
+            var trHTML = '';
+            trHTML += '<td><strong>#' + (r + 1) + '</strong> ' + (isWin ? '👑' : '') + '</td>';
+            trHTML += '<td><strong style="color:' + ALGO_COLORS[item.algorithm] + '">' + item.algorithm + '</strong></td>';
+            trHTML += '<td class="mono" style="font-size:0.8rem;">' + appState.initialHead + ' → ' + item.serviceOrder.join(' → ') + '</td>';
+            trHTML += '<td style="text-align:right; font-weight:700; font-size:1rem;">' + item.totalHeadMovement + '</td>';
+            trHTML += '<td style="text-align:right;">' + item.averageMovementPerRequest.toFixed(2) + '</td>';
+            trHTML += '<td><span class="badge" style="background:#dcfce7; color:#15803d; border-color:#86efac;">Completed</span></td>';
+            trHTML += '<td style="text-align:right; font-family:ui-monospace, monospace;">' + item.elapsedMs + ' ms</td>';
+            trHTML += '<td><button type="button" class="btn-chip" onclick="window.inspectAlgo(\'' + item.algorithm + '\')">View</button></td>';
+
+            tr.innerHTML = trHTML;
+            tableBody.appendChild(tr);
+          }
+
+          // 3. Render SVG Bar Chart
+          renderBarChart(minTotal);
+        }
+
+        function renderBarChart(minTotal) {
+          var svg = dom.svgBarChart;
+          var width = 800;
+          var height = 240;
+          var marginX = 60;
+          var marginY = 30;
+
+          // Find max total head movement to scale the Y-axis
+          var maxMovement = 0;
+          for (var a = 0; a < ALGORITHMS.length; a++) {
+            var res = appState.results[ALGORITHMS[a]];
+            if (res && res.totalHeadMovement > maxMovement) {
+              maxMovement = res.totalHeadMovement;
+            }
+          }
+          if (maxMovement === 0) maxMovement = 100;
+          maxMovement = Math.ceil(maxMovement * 1.15); // Add headroom
+
+          var usableWidth = width - (marginX * 2);
+          var usableHeight = height - (marginY * 2);
+          var barWidth = usableWidth / ALGORITHMS.length * 0.55;
+          var colWidth = usableWidth / ALGORITHMS.length;
+
+          var markup = '';
+
+          // Horizontal grid lines
+          var gridSteps = 4;
+          for (var g = 0; g <= gridSteps; g++) {
+            var val = Math.round((g / gridSteps) * maxMovement);
+            var gy = (height - marginY) - (val / maxMovement) * usableHeight;
+            markup += '<line x1="' + marginX + '" y1="' + gy + '" x2="' + (width - marginX) + '" y2="' + gy + '" stroke="#ede5f5" stroke-width="1" />';
+            markup += '<text x="' + (marginX - 10) + '" y="' + (gy + 4) + '" font-size="10" font-weight="600" fill="#7a6b8e" text-anchor="end" font-family="ui-monospace, monospace">' + val + '</text>';
+          }
+
+          // Draw bars
+          var winnerNames = [];
+          for (var i = 0; i < ALGORITHMS.length; i++) {
+            var algo = ALGORITHMS[i];
+            var r = appState.results[algo];
+            if (!r) continue;
+
+            var val = r.totalHeadMovement;
+            var isWinner = (val === minTotal);
+            if (isWinner) winnerNames.push(algo);
+
+            var barHeight = (val / maxMovement) * usableHeight;
+            var bx = marginX + (i * colWidth) + (colWidth - barWidth) / 2;
+            var by = (height - marginY) - barHeight;
+            var color = ALGO_COLORS[algo];
+
+            // Bar Rect
+            markup += '<rect x="' + bx + '" y="' + by + '" width="' + barWidth + '" height="' + barHeight + '" rx="5" fill="' + color + '" />';
+
+            // Winner crown / highlight
+            if (isWinner) {
+              markup += '<rect x="' + (bx - 2) + '" y="' + (by - 2) + '" width="' + (barWidth + 4) + '" height="' + (barHeight + 4) + '" rx="7" fill="none" stroke="#10b981" stroke-width="2.5" />';
+              markup += '<text x="' + (bx + barWidth / 2) + '" y="' + (by - 18) + '" font-size="13" text-anchor="middle">👑</text>';
+            }
+
+            // Value text on top of bar
+            markup += '<text x="' + (bx + barWidth / 2) + '" y="' + (by - 5) + '" font-size="11" font-weight="800" fill="' + (isWinner ? '#10b981' : '#2d2340') + '" text-anchor="middle" font-family="ui-monospace, monospace">' + val + '</text>';
+
+            // X-axis label
+            markup += '<text x="' + (bx + barWidth / 2) + '" y="' + (height - marginY + 18) + '" font-size="11" font-weight="700" fill="' + color + '" text-anchor="middle">' + algo + '</text>';
+          }
+
+          svg.innerHTML = markup;
+          dom.chartWinner.textContent = 'Lowest Seek: ' + winnerNames.join(', ') + ' (' + minTotal + ' cylinders)';
+        }
+
+        window.inspectAlgo = function(algo) {
+          window.switchTab('tab-detail');
+          window.selectDetailedAlgo(algo);
+        };
+
+        // ==========================================
+        // 9. Viva Questions & Theory Interactivity
+        // ==========================================
+        function updateVivaDynamicQuestion() {
+          var minVal = Infinity;
+          var winners = [];
+
+          for (var a = 0; a < ALGORITHMS.length; a++) {
+            var k = ALGORITHMS[a];
+            if (appState.results[k]) {
+              var m = appState.results[k].totalHeadMovement;
+              if (m < minVal) {
+                minVal = m;
+                winners = [k];
+              } else if (m === minVal) {
+                winners.push(k);
+              }
+            }
+          }
+
+          if (winners.length > 0) {
+            var winnerStr = winners.join(' and ') + ' (' + minVal + ' cylinders)';
+            dom.vivaWinnerHighlight.textContent = winnerStr;
+            dom.vivaAnswerQ20.innerHTML = 'For the current input parameters (Initial head: <strong>' + appState.initialHead + '</strong>, Queue: <code>' + appState.queue.join(', ') + '</code>, Direction: <strong>' + appState.direction + '</strong>), <strong>' + winners.join(' and ') + '</strong> achieved the lowest total head movement with <strong>' + minVal + ' cylinders</strong>. This algorithm proved the most mechanically efficient for this specific request pattern.';
+          }
+        }
+
+        window.toggleAccordion = function(headerBtn) {
+          var content = headerBtn.nextElementSibling;
+          var isActive = headerBtn.classList.contains('active');
+          if (isActive) {
+            headerBtn.classList.remove('active');
+            content.classList.remove('active');
+          } else {
+            headerBtn.classList.add('active');
+            content.classList.add('active');
+          }
+        };
+
+        window.expandAllViva = function(expand) {
+          var cards = document.querySelectorAll('#viva-questions-list .viva-card');
+          for (var i = 0; i < cards.length; i++) {
+            cards[i].style.display = 'block';
+          }
+        };
+
+        window.filterVivaQuestions = function() {
+          var q = document.getElementById('viva-search-input').value.toLowerCase().trim();
+          var cards = document.querySelectorAll('#viva-questions-list .viva-card');
+          for (var i = 0; i < cards.length; i++) {
+            var card = cards[i];
+            var text = card.textContent.toLowerCase();
+            var keywords = (card.getAttribute('data-keywords') || '').toLowerCase();
+            if (!q || text.indexOf(q) !== -1 || keywords.indexOf(q) !== -1) {
+              card.style.display = 'block';
+            } else {
+              card.style.display = 'none';
+            }
+          }
+        };
+
+        // ==========================================
+        // 10. Navigation & Presets
+        // ==========================================
+        window.switchTab = function(tabId) {
+          appState.activeTab = tabId;
+          var tabBtns = document.querySelectorAll('.nav-tabs .tab-btn');
+          for (var i = 0; i < tabBtns.length; i++) {
+            if (tabBtns[i].getAttribute('data-tab') === tabId) {
+              tabBtns[i].classList.add('active');
+            } else {
+              tabBtns[i].classList.remove('active');
+            }
+          }
+
+          var tabPanes = document.querySelectorAll('.tab-pane');
+          for (var j = 0; j < tabPanes.length; j++) {
+            if (tabPanes[j].id === tabId) {
+              tabPanes[j].classList.add('active');
+            } else {
+              tabPanes[j].classList.remove('active');
+            }
+          }
+
+          // Trigger view refresh if needed
+          if (tabId === 'tab-race') {
+            renderRaceModeArena();
+          } else if (tabId === 'tab-dashboard') {
+            renderComparisonDashboard();
+          }
+        };
+
+        window.applyPreset = function(type) {
+          if (type === 'default') {
+            dom.queueInput.value = '98, 183, 37, 122, 14, 124, 65, 67';
+            dom.headInput.value = '53';
+            dom.diskSizeInput.value = '200';
+            dom.directionSelect.value = 'Right';
+            dom.cscanJumpCheck.checked = true;
+          } else if (type === 'ascending') {
+            dom.queueInput.value = '20, 45, 75, 105, 130, 160, 185';
+            dom.headInput.value = '10';
+            dom.diskSizeInput.value = '200';
+            dom.directionSelect.value = 'Right';
+          } else if (type === 'descending') {
+            dom.queueInput.value = '185, 160, 130, 105, 75, 45, 20';
+            dom.headInput.value = '190';
+            dom.diskSizeInput.value = '200';
+            dom.directionSelect.value = 'Left';
+          } else if (type === 'clustered') {
+            dom.queueInput.value = '48, 52, 55, 50, 150, 155, 152, 149';
+            dom.headInput.value = '50';
+            dom.diskSizeInput.value = '200';
+            dom.directionSelect.value = 'Right';
+          } else if (type === 'pingpong') {
+            dom.queueInput.value = '10, 190, 12, 188, 15, 185, 8, 195';
+            dom.headInput.value = '100';
+            dom.diskSizeInput.value = '200';
+            dom.directionSelect.value = 'Right';
+          } else if (type === 'random') {
+            var randList = [];
+            var size = parseInt(dom.diskSizeInput.value, 10) || 200;
+            for (var r = 0; r < 8; r++) {
+              randList.push(Math.floor(Math.random() * size));
+            }
+            dom.queueInput.value = randList.join(', ');
+            dom.headInput.value = Math.floor(Math.random() * size);
+          }
+
+          window.runSimulation();
+        };
+
+        window.resetSimulator = function() {
+          stopCurrentAnimation();
+          stopRaceAnimation();
+          terminateWorkers();
+
+          dom.queueInput.value = '98, 183, 37, 122, 14, 124, 65, 67';
+          dom.headInput.value = '53';
+          dom.diskSizeInput.value = '200';
+          dom.directionSelect.value = 'Right';
+          dom.cscanJumpCheck.checked = true;
+          dom.workloadCheck.checked = false;
+          showError(null);
+
+          window.runSimulation();
+        };
+
+        // Initialize on DOM load
+        document.addEventListener('DOMContentLoaded', function() {
+          initDOM();
+          // Initial default run
+          window.runSimulation();
+        });
+
+      })();
+    </script>
+  </body>
+</html>

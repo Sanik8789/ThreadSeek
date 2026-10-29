@@ -1,0 +1,6 @@
+{
+  "name": "ThreadSeek: A Parallel Disk Scheduling Simulator",
+  "description": "Watch five disk scheduling algorithms race in parallel Web Worker threads with interactive visualizations, step-by-step playback, comparison dashboard, and viva prep.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
